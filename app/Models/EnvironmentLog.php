@@ -11,6 +11,7 @@ class EnvironmentLog extends Model
 
     // Tambahkan baris di bawah ini:
     protected $fillable = [
+        'wbgt',
         'unit_id',
         'air_speed',
         'twb',

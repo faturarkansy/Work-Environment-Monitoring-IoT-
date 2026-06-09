@@ -18,15 +18,17 @@ class EnvironmentController extends Controller
         foreach ($rawLogs as $item) {
             // Pecah string menjadi array
             $airSpeeds = explode(', ', $item->air_speed);
-            $twbs = explode(', ', $item->twb);
-            $tdbs = explode(', ', $item->tdb);
-            $mrts = explode(', ', $item->mrt);
-            $rhs = explode(', ', $item->rh);
-            $o2s = explode(', ', $item->o2);
-            // Pastikan gas_volume juga di-explode jika Anda menyimpannya sebagai string
-            $cos = explode(', ', $item->co);
+            $twbs      = explode(', ', $item->twb);
+            $tdbs      = explode(', ', $item->tdb);
+            $mrts      = explode(', ', $item->mrt);
+            $rhs       = explode(', ', $item->rh);
+            $o2s       = explode(', ', $item->o2);
+            $cos       = explode(', ', $item->co);
+            
+            // PERBAIKAN: Pecah data string kolom wbgt dari database
+            $wbgts     = $item->wbgt ? explode(', ', $item->wbgt) : [];
 
-            // LOGIKA BARU: Jabarkan data untuk filter 'all' DAN filter unit spesifik
+            // LOGIKA: Jabarkan data untuk filter 'all' DAN filter unit spesifik
             if ($filter === 'all' || $item->unit_id == $filter) {
                 $tempBatch = [];
 
@@ -42,13 +44,14 @@ class EnvironmentController extends Controller
                         'rh' => $rhs[$i] ?? 0,
                         'o2' => $o2s[$i] ?? 0,
                         'co' => $cos[$i] ?? 0,
+                        
+                        // PERBAIKAN: Petakan nilai WBGT sesuai urutan detiknya ($i)
+                        'wbgt' => $wbgts[$i] ?? '0.00',
                     ];
                 }
 
                 // Masukkan batch yang sudah dibalik (descending per detik)
                 foreach (array_reverse($tempBatch) as $log) {
-                    // Jika filter 'all', kita masukkan semua data dari semua unit
-                    // Jika filter unit tertentu, hanya yang cocok yang masuk (sudah difilter di 'else if' atas)
                     $expandedLogs->push($log);
                 }
             }

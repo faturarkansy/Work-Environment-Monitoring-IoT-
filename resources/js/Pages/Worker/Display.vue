@@ -11,7 +11,7 @@ const props = defineProps({
 const page = usePage();
 const liveWorkerData = ref(props.workerData);
 
-// --- DATA REFERENSI PAKAIAN (image_49c1c0.png) ---
+// --- DATA REFERENSI PAKAIAN ---
 const garmentOptions = [
     { desc: "Men's briefs", clo: 0.04 },
     { desc: "T-shirt", clo: 0.08 },
@@ -25,7 +25,7 @@ const garmentOptions = [
     { desc: "Long sleeve shirt (thick)", clo: 0.36 },
 ];
 
-// --- DATA REFERENSI AKTIVITAS (image_49c1a0.jpg) ---
+// --- DATA REFERENSI AKTIVITAS ---
 const activityOptions = [
     { label: "Sleeping", met: 0.7, w_m2: 40 },
     { label: "Seated", met: 1.0, w_m2: 60 },
@@ -186,11 +186,11 @@ const toggleModal = () => (isModalOpen.value = !isModalOpen.value);
 
     <AuthenticatedLayout>
         <div class="py-6 bg-gray-50 min-h-screen">
-            <div class="max-w-7xl mx-auto sm:px-4 lg:px-8 space-y-6">
+            <div class="max-w-7xl mx-auto px-6 sm:px-4 lg:px-8 space-y-6">
                 <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
                     <div class="flex flex-col space-y-3 lg:col-span-1">
                         <div
-                            class="col-span-2 md:col-span-3 px-6 py-4 rounded-2xl shadow-md flex flex-col justify-between min-h-[140px]"
+                            class="px-6 py-4 rounded-2xl shadow-md flex flex-col justify-between min-h-[140px]"
                             :style="{ background: environmentStatus.color }"
                         >
                             <div class="text-white">
@@ -320,13 +320,14 @@ const toggleModal = () => (isModalOpen.value = !isModalOpen.value);
                                 Metabolic Rate :
                                 <span
                                     class="text-gray-800 font-bold text-lg ms-1.5 font-sans"
-                                    >{{
+                                >
+                                    {{
                                         selectedActivity
                                             ? selectedActivity.w_m2
                                             : "0.00"
                                     }}
-                                    w/m²</span
-                                >
+                                    w/m²
+                                </span>
                             </p>
                         </div>
                     </div>
@@ -347,8 +348,9 @@ const toggleModal = () => (isModalOpen.value = !isModalOpen.value);
                     </h3>
                     <span
                         class="text-xs bg-indigo-50 text-indigo-600 font-bold px-2.5 py-1 rounded-md"
-                        >Unit ID: {{ liveWorkerData?.id || "?" }}</span
                     >
+                        Unit ID: {{ liveWorkerData?.id || "?" }}
+                    </span>
                 </div>
 
                 <div class="space-y-3.5 max-h-[400px] overflow-y-auto pr-1">

@@ -20,14 +20,13 @@ class MqttSubscriber extends Command
      *
      * @var string
      */
-    protected $description = 'Command description';
+    protected $description = 'Subscribe to MQTT broker and buffer environment data into MySQL database';
 
     /**
      * Execute the console command.
      */
     public function handle()
     {
-        // Gunakan broker yang sesuai dengan ESP32 Anda
         $mqtt = new \Bluerhinos\phpMQTT('broker.hivemq.com', 1883, 'LaravelClient_' . uniqid());
 
         if ($mqtt->connect()) {
@@ -36,7 +35,7 @@ class MqttSubscriber extends Command
             // Format subscribe yang benar untuk library BlueRhinos:
             $topics['monitoring/lingkungan'] = [
                 'qos' => 0,
-                'function' => function ($topic, $msg) { // Tambahkan kunci 'function' di sini
+                'function' => function ($topic, $msg) {
                     echo "\n[DEBUG] Ada pesan masuk di topik $topic: $msg\n";
 
                     $payload = json_decode($msg, true);
@@ -50,7 +49,7 @@ class MqttSubscriber extends Command
 
                     $cacheKey = "mqtt_buffer_unit_" . $unitId;
 
-                    // Ambil buffer
+                    // Ambil atau inisialisasi buffer termasuk key 'wbgt'
                     $buffer = Cache::get($cacheKey, [
                         'airSpeed' => [],
                         'Twb' => [],
@@ -58,20 +57,38 @@ class MqttSubscriber extends Command
                         'MRT' => [],
                         'RH' => [],
                         'O2' => [],
-                        'CO' => []
+                        'CO' => [],
+                        'wbgt' => [] // Tambahan wadah buffer WBGT
                     ]);
 
-                    // Isi buffer
-                    $buffer['airSpeed'][] = $payload['airSpeed'] ?? 0;
-                    $buffer['Twb'][]      = $payload['Twb'] ?? 0;
-                    $buffer['Tdb'][]      = $payload['Tdb'] ?? 0;
-                    $buffer['MRT'][]      = $payload['MRT'] ?? 0;
-                    $buffer['RH'][]       = $payload['RH'] ?? 0;
-                    $buffer['O2'][]       = $payload['O2'] ?? 0;
-                    $buffer['CO'][]      = $payload['CO'] ?? 0;
+                    // Ambil nilai sensor dengan fallback 0 jika kosong
+                    $v   = parseFloatValue($payload['airSpeed'] ?? $payload['airspeed'] ?? 0);
+                    $twb = parseFloatValue($payload['Twb'] ?? $payload['twb'] ?? 0);
+                    $tdb = parseFloatValue($payload['Tdb'] ?? $payload['tdb'] ?? 0);
+                    $mrt = parseFloatValue($payload['MRT'] ?? $payload['mrt'] ?? 0);
+                    $rh  = parseFloatValue($payload['RH'] ?? $payload['rh'] ?? 0);
+                    $o2  = parseFloatValue($payload['O2'] ?? $payload['o2'] ?? 0);
+                    $co  = parseFloatValue($payload['CO'] ?? $payload['co'] ?? 0);
+
+                    // --- PERBAIKAN: LOGIKA KALKULASI WBGT LOKAL PER DETIK (HAPUS SINTAKS 'let') ---
+                    $tg = $mrt;
+                    if ($v > 0.0) {
+                        $tg = (0.4 * $mrt) + (0.6 * $tdb);
+                    }
+                    $calculatedWbgt = (0.7 * $twb) + (0.3 * $tg);
+
+                    // Isi ke dalam array buffer masing-masing
+                    $buffer['airSpeed'][] = $v;
+                    $buffer['Twb'][]      = $twb;
+                    $buffer['Tdb'][]      = $tdb;
+                    $buffer['MRT'][]      = $mrt;
+                    $buffer['RH'][]       = $rh;
+                    $buffer['O2'][]       = $o2;
+                    $buffer['CO'][]       = $co;
+                    $buffer['wbgt'][]     = round($calculatedWbgt, 2); // Simpan presisi 2 desimal
 
                     if (count($buffer['airSpeed']) >= 10) {
-                        // Simpan data sebagai deretan string, bukan rata-rata
+                        // Simpan seluruh data deretan sebagai string terpisah koma ke DB
                         \App\Models\EnvironmentLog::create([
                             'unit_id'    => $unitId,
                             'air_speed'  => implode(', ', $buffer['airSpeed']),
@@ -81,11 +98,11 @@ class MqttSubscriber extends Command
                             'rh'         => implode(', ', $buffer['RH']),
                             'o2'         => implode(', ', $buffer['O2']),
                             'co'         => implode(', ', $buffer['CO']),
+                            'wbgt'       => implode(', ', $buffer['wbgt']), // Simpan kolom baru wbgt ke DB
                         ]);
 
-                        // Reset cache
                         Cache::forget($cacheKey);
-                        $this->info("\n[SUCCESS] Data 10 deret Unit $unitId disimpan ke DB.");
+                        $this->info("\n[SUCCESS] Data 10 deret Unit $unitId + WBGT disimpan ke DB.");
                     } else {
                         Cache::put($cacheKey, $buffer, 60);
                         echo "Buffering Unit $unitId: " . count($buffer['airSpeed']) . "/10\n";
@@ -107,4 +124,31 @@ class MqttSubscriber extends Command
             $this->error("Gagal terhubung ke Broker.");
         }
     }
+}
+
+// Helper function untuk mengamankan parsing numerik di sisi PHP backend
+// Helper function yang diperketat untuk menangani inf, nan, dan teks rusak
+function parseFloatValue($val) {
+    // 1. Jika berupa string, bersihkan spasi dan ubah ke huruf kecil untuk validasi
+    if (is_string($val)) {
+        $trimmed = strtolower(trim($val));
+        if ($trimmed === 'inf' || $trimmed === 'nan' || $trimmed === '-inf') {
+            return 0.0;
+        }
+    }
+
+    // 2. Cek apakah format dasarnya adalah numerik
+    if (is_numeric($val)) {
+        $floatVal = (float)$val;
+
+        // 3. Proteksi lapis kedua jika lolos pembacaan float sistem
+        if (is_nan($floatVal) || is_infinite($floatVal)) {
+            return 0.0;
+        }
+
+        return $floatVal;
+    }
+
+    // 4. Fallback jika data rusak total / berupa string teks biasa
+    return 0.0;
 }
