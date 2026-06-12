@@ -36,7 +36,7 @@ const showingNavigationDropdown = ref(false);
                             <h1
                                 class="text-xl font-bold text-gray-800 leading-tight"
                             >
-                                Work Environment Monitor (Live)
+                                Envimatework
                             </h1>
                         </div>
                     </div>
