@@ -1,7 +1,8 @@
 <script setup>
 import AuthenticatedLayout from "@/Layouts/AuthenticatedLayout.vue";
 import { Head, usePage } from "@inertiajs/vue3";
-import { ref, computed, onMounted } from "vue";
+import { ref, computed, onMounted, nextTick } from "vue";
+import axios from "axios";
 
 const props = defineProps({
     workerData: Object,
@@ -10,6 +11,14 @@ const props = defineProps({
 
 const page = usePage();
 const liveWorkerData = ref(props.workerData);
+const currentTime = ref("--:--:--");
+
+// State Utama untuk Mengontrol Aktivitas Perhitungan & Penyimpanan Real-time
+const isLogging = ref(false);
+
+// State Pengontrol Bukanya Dropdown Baru
+const isActivityDropdownOpen = ref(false);
+const activeGarmentDropdownIndex = ref(null);
 
 // --- DATA REFERENSI PAKAIAN ---
 const garmentOptions = [
@@ -37,11 +46,26 @@ const activityOptions = [
 
 // --- LOGIKA REAL-TIME (LARAVEL ECHO) ---
 onMounted(() => {
+    setInterval(() => {
+        currentTime.value = new Date().toLocaleTimeString("id-ID", {
+            hour: "2-digit",
+            minute: "2-digit",
+            second: "2-digit",
+            hour12: false,
+        });
+    }, 1000);
+
     if (window.Echo) {
         window.Echo.channel("environment-monitor").listen(
             ".data.received",
             (e) => {
                 liveWorkerData.value = e.data;
+
+                if (isLogging.value) {
+                    nextTick(() => {
+                        sendWorkerMetricsToDatabase();
+                    });
+                }
             },
         );
     }
@@ -49,13 +73,24 @@ onMounted(() => {
 
 // --- STATE INPUT USER ---
 const selectedGarments = ref([{ value: 0 }]);
-const selectedActivity = ref(activityOptions[1]); // Default: Seated
+const selectedActivity = ref(null);
 const isModalOpen = ref(false);
 
 const addGarment = () => selectedGarments.value.push({ value: 0 });
 const removeGarment = (index) => {
-    if (selectedGarments.value.length > 1)
+    if (selectedGarments.value.length > 1) {
         selectedGarments.value.splice(index, 1);
+        if (activeGarmentDropdownIndex.value === index) {
+            activeGarmentDropdownIndex.value = null;
+        }
+    }
+};
+
+const getGarmentDesc = (cloValue) => {
+    const found = garmentOptions.find(
+        (opt) => opt.clo === parseFloat(cloValue),
+    );
+    return found ? found.desc : "Select Clothing";
 };
 
 const totalClo = computed(() => {
@@ -64,6 +99,34 @@ const totalClo = computed(() => {
         0,
     );
 });
+
+// --- FUNGSI SAKELAR TOMBOL: INPUT / CANCEL ---
+const toggleLogging = () => {
+    if (!isLogging.value) {
+        if (totalClo.value === 0) {
+            alert("Harap pilih jenis insulasi pakaian (Clo) terlebih dahulu!");
+            return;
+        }
+        if (!selectedActivity.value || selectedActivity.value.w_m2 === 0) {
+            alert("Harap pilih jenis aktivitas kerja (Met) terlebih dahulu!");
+            return;
+        }
+
+        isLogging.value = true;
+        console.log("[SYSTEM] Pengiriman data realtime ke database DIMULAI.");
+
+        if (liveWorkerData.value) {
+            nextTick(() => {
+                sendWorkerMetricsToDatabase();
+            });
+        }
+    } else {
+        isLogging.value = false;
+        console.log(
+            "[SYSTEM] Pengiriman data realtime ke database DIHENTIKAN.",
+        );
+    }
+};
 
 // --- PERHITUNGAN PMV & PPD DINAMIS ---
 const calculatedMetrics = computed(() => {
@@ -95,6 +158,10 @@ const calculatedMetrics = computed(() => {
     const twb = parseVal(s.twb || s.Twb);
     const o2 = parseVal(s.o2 || s.O2);
     const co = parseVal(s.co || s.CO);
+
+    if (!isLogging.value) {
+        return { pmv: 0, ppd: 0, ta, rh, v, tr, twb, o2, co };
+    }
 
     const M = selectedActivity.value.w_m2;
     const Icl = totalClo.value;
@@ -141,6 +208,13 @@ const calculatedMetrics = computed(() => {
 
 // --- STATUS LINGKUNGAN DINAMIS ---
 const environmentStatus = computed(() => {
+    if (!isLogging.value) {
+        return {
+            label: "Waiting Data...",
+            color: "linear-gradient(135deg, #9ca3af 50%, #6b7280 100%)",
+        };
+    }
+
     const p = calculatedMetrics.value.pmv;
     if (p <= 0.5 && p >= -0.5)
         return {
@@ -178,6 +252,35 @@ const environmentStatus = computed(() => {
     };
 });
 
+// --- FUNGSI REKAM DATA PERSONAL WORKER KE DATABASE ---
+const sendWorkerMetricsToDatabase = () => {
+    if (!isLogging.value) return;
+
+    const metrics = calculatedMetrics.value;
+    const currentClo = totalClo.value;
+    const currentMet = selectedActivity.value ? selectedActivity.value.w_m2 : 0;
+
+    axios
+        .post(route("worker.store-log"), {
+            pmv: parseFloat(metrics.pmv.toFixed(4)),
+            ppd: parseFloat(metrics.ppd.toFixed(4)),
+            clothing_insulation: currentClo,
+            activity_name: selectedActivity.value
+                ? selectedActivity.value.label
+                : "Unknown",
+            activity_met: currentMet,
+        })
+        .then((response) => {
+            console.log(
+                "[AXIOS SUCCESS] Riwayat personal tersimpan di DB:",
+                response.data.message,
+            );
+        })
+        .catch((error) => {
+            console.error("[AXIOS ERROR] Gagal menyimpan log:", error);
+        });
+};
+
 const toggleModal = () => (isModalOpen.value = !isModalOpen.value);
 </script>
 
@@ -185,61 +288,65 @@ const toggleModal = () => (isModalOpen.value = !isModalOpen.value);
     <Head title="My Work Status" />
 
     <AuthenticatedLayout>
-        <div class="py-6 bg-gray-50 min-h-screen">
-            <div class="max-w-7xl mx-auto px-6 sm:px-4 lg:px-8 space-y-6">
-                <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
-                    <div class="flex flex-col space-y-3 lg:col-span-1">
+        <div class="py-6 bg-gray-50 min-h-screen font-sans">
+            <div class="max-w-7xl mx-auto px-6 sm:px-4 lg:px-8 space-y-4">
+                <div class="grid grid-cols-1 lg:grid-cols-3 gap-4 items-start">
+                    <div class="flex flex-col space-y-4 lg:col-span-1">
                         <div
-                            class="px-6 py-4 rounded-2xl shadow-md flex flex-col justify-between min-h-[140px]"
+                            class="px-6 py-4 rounded-2xl shadow-md flex flex-col justify-between min-h-[140px] transition-all duration-500"
                             :style="{ background: environmentStatus.color }"
                         >
                             <div class="text-white">
-                                <p class="text-lg opacity-90">
-                                    Status Lingkungan Kerja :
+                                <p class="text-lg opacity-90 font-medium">
+                                    Thermal Comfort Status :
                                 </p>
-                                <h2 class="text-3xl font-bold mt-2">
+                                <h2
+                                    class="text-3xl font-bold mt-2 tracking-tight"
+                                >
                                     {{ environmentStatus.label }}
                                 </h2>
-                                <div class="flex space-x-4">
-                                    <p class="text-xs opacity-70">
-                                        PMV:
+                                <div class="flex space-x-4 mt-1">
+                                    <p class="text-base opacity-75 font-mono">
+                                        PMV Index:
                                         {{ calculatedMetrics.pmv.toFixed(2) }} |
-                                        PPD:
+                                        PPD Index:
                                         {{ calculatedMetrics.ppd.toFixed(2) }}%
                                     </p>
                                 </div>
                             </div>
                             <div
-                                class="bg-white/90 text-sm py-1 px-4 rounded-full text-center mt-4"
+                                class="bg-white/90 text-sm py-1 px-4 rounded-full text-center backdrop-blur-sm mt-4"
                             >
                                 <span
                                     class="font-mono font-bold text-lg text-gray-800"
-                                    >{{ currentTime }} WIB</span
                                 >
+                                    {{ currentTime }} WIB
+                                </span>
                             </div>
                         </div>
 
                         <button
                             @click="toggleModal"
-                            class="w-full bg-black text-white text-xs font-bold py-3 px-4 rounded-xl hover:bg-gray-900 transition shadow-sm uppercase tracking-wider"
+                            class="w-full bg-black text-white text-[14px] font-bold h-[40px] px-4 rounded-3xl hover:bg-gray-900 transition shadow-sm uppercase tracking-wider cursor-pointer"
                         >
                             Show Sensors Details
                         </button>
                     </div>
 
                     <div
-                        class="bg-white p-6 rounded-3xl shadow-sm border border-gray-200 lg:col-span-2 min-h-[233px] flex flex-col justify-between"
+                        class="bg-white p-6 rounded-3xl shadow-sm border border-gray-200 lg:col-span-2 min-h-[233px] flex flex-col justify-between shadow-[0_0_4px_#00000015]"
                     >
                         <div>
                             <h3
-                                class="text-md font-bold text-gray-800 mb-4 tracking-tight"
+                                class="text-[17px] font-bold text-[#333] mb-5 tracking-tight font-sans"
                             >
                                 Personal Adjustment
                             </h3>
-                            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                <div class="space-y-2">
+
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div class="space-y-3">
                                     <label
-                                        class="text-xs font-bold text-gray-700 block"
+                                        class="text-xs font-bold text-gray-700 block uppercase tracking-wider"
                                         >Clothing Layer (Clo)</label
                                     >
                                     <div
@@ -247,88 +354,236 @@ const toggleModal = () => (isModalOpen.value = !isModalOpen.value);
                                             garment, index
                                         ) in selectedGarments"
                                         :key="index"
-                                        class="flex gap-2 items-center"
+                                        class="flex gap-3 items-center relative"
                                     >
-                                        <select
-                                            v-model="garment.value"
-                                            class="flex-1 rounded-lg border-gray-300 text-xs focus:ring-indigo-500 focus:border-indigo-500 py-2"
-                                        >
-                                            <option :value="0">
-                                                Select Clothing
-                                            </option>
-                                            <option
-                                                v-for="opt in garmentOptions"
-                                                :key="opt.desc"
-                                                :value="opt.clo"
+                                        <div class="flex-1 relative">
+                                            <button
+                                                type="button"
+                                                :disabled="isLogging"
+                                                @click="
+                                                    activeGarmentDropdownIndex =
+                                                        activeGarmentDropdownIndex ===
+                                                        index
+                                                            ? null
+                                                            : index
+                                                "
+                                                class="w-full border border-[#ccd3dd] rounded-3xl px-[25px] h-[40px] transition-all duration-200 bg-white text-[14px] text-[#333] flex items-center justify-between focus:border-[#6a53f2] focus:outline-none cursor-pointer disabled:bg-gray-50 disabled:text-gray-400 disabled:cursor-not-allowed"
+                                                :class="{
+                                                    'border-[#6a53f2] ring-2 ring-indigo-100':
+                                                        activeGarmentDropdownIndex ===
+                                                        index,
+                                                }"
                                             >
-                                                {{ opt.desc }}
-                                            </option>
-                                        </select>
+                                                <span class="truncate">{{
+                                                    getGarmentDesc(
+                                                        garment.value,
+                                                    )
+                                                }}</span>
+                                                <svg
+                                                    class="w-4 h-4 text-gray-400 transition-transform duration-200 shrink-0 ms-2"
+                                                    :class="{
+                                                        'rotate-180':
+                                                            activeGarmentDropdownIndex ===
+                                                            index,
+                                                    }"
+                                                    fill="none"
+                                                    stroke="currentColor"
+                                                    viewBox="0 0 24 24"
+                                                >
+                                                    <path
+                                                        stroke-linecap="round"
+                                                        stroke-linejoin="round"
+                                                        stroke-width="2"
+                                                        d="M19 9l-7 7-7-7"
+                                                    />
+                                                </svg>
+                                            </button>
+
+                                            <div
+                                                v-if="
+                                                    activeGarmentDropdownIndex ===
+                                                    index
+                                                "
+                                                class="absoluteSub z-[60] absolute w-full mt-1.5 bg-white border border-gray-200 rounded-2xl shadow-xl max-h-[220px] overflow-y-auto py-1 animate-in fade-in slide-in-from-top-1 duration-150"
+                                            >
+                                                <div
+                                                    v-for="opt in garmentOptions"
+                                                    :key="opt.desc"
+                                                    @click="
+                                                        garment.value = opt.clo;
+                                                        activeGarmentDropdownIndex =
+                                                            null;
+                                                    "
+                                                    class="px-[25px] py-2 text-[14px] cursor-pointer transition-colors duration-150 flex items-center justify-between hover:bg-gray-50 hover:text-[#6a53f2]"
+                                                    :class="
+                                                        garment.value ===
+                                                        opt.clo
+                                                            ? 'bg-indigo-50 text-[#6a53f2] font-semibold'
+                                                            : 'text-gray-700'
+                                                    "
+                                                >
+                                                    {{ opt.desc }}
+                                                    <span
+                                                        class="text-xs font-mono text-gray-400"
+                                                        >({{
+                                                            opt.clo
+                                                        }}
+                                                        Clo)</span
+                                                    >
+                                                </div>
+                                            </div>
+                                        </div>
+
                                         <button
                                             @click="removeGarment(index)"
                                             :disabled="
-                                                selectedGarments.length === 1
+                                                selectedGarments.length === 1 ||
+                                                isLogging
                                             "
-                                            class="text-xs font-bold text-gray-800 hover:text-red-600 disabled:opacity-20 shrink-0"
+                                            class="text-xs font-bold text-gray-500 hover:text-red-600 disabled:opacity-20 shrink-0 font-sans transition-colors cursor-pointer"
                                         >
                                             Delete
                                         </button>
                                     </div>
+
                                     <button
                                         @click="addGarment"
-                                        class="text-xs font-bold text-gray-800 hover:underline flex items-center mt-1"
+                                        :disabled="isLogging"
+                                        class="text-xs font-bold text-[#6a53f2] hover:text-[#583fe4] hover:underline flex items-center mt-1 disabled:opacity-20 transition-colors cursor-pointer"
                                     >
-                                        + Add more
+                                        + Add more clothing
                                     </button>
                                 </div>
 
-                                <div class="space-y-2">
+                                <div class="space-y-3 relative">
                                     <label
-                                        class="text-xs font-bold text-gray-700 block"
+                                        class="text-xs font-bold text-gray-700 block uppercase tracking-wider"
                                         >Current Activity (Met)</label
                                     >
-                                    <select
-                                        v-model="selectedActivity"
-                                        class="w-full rounded-lg border-gray-300 text-xs focus:ring-indigo-500 focus:border-indigo-500 py-2"
-                                    >
-                                        <option :value="null" disabled>
-                                            Select Activity
-                                        </option>
-                                        <option
-                                            v-for="act in activityOptions"
-                                            :key="act.label"
-                                            :value="act"
+                                    <div class="relative">
+                                        <button
+                                            type="button"
+                                            :disabled="isLogging"
+                                            @click="
+                                                isActivityDropdownOpen =
+                                                    !isActivityDropdownOpen
+                                            "
+                                            class="w-full border border-[#ccd3dd] rounded-3xl px-[25px] h-[40px] transition-all duration-200 bg-white text-[14px] text-[#333] flex items-center justify-between focus:border-[#6a53f2] focus:outline-none cursor-pointer disabled:bg-gray-50 disabled:text-gray-400 disabled:cursor-not-allowed"
+                                            :class="{
+                                                'border-[#6a53f2] ring-2 ring-indigo-100':
+                                                    isActivityDropdownOpen,
+                                            }"
                                         >
-                                            {{ act.label }}
-                                        </option>
-                                    </select>
+                                            <span>{{
+                                                selectedActivity
+                                                    ? selectedActivity.label
+                                                    : "Select Activity"
+                                            }}</span>
+                                            <svg
+                                                class="w-4 h-4 text-gray-400 transition-transform duration-200"
+                                                :class="{
+                                                    'rotate-180':
+                                                        isActivityDropdownOpen,
+                                                }"
+                                                fill="none"
+                                                stroke="currentColor"
+                                                viewBox="0 0 24 24"
+                                            >
+                                                <path
+                                                    stroke-linecap="round"
+                                                    stroke-linejoin="round"
+                                                    stroke-width="2"
+                                                    d="M19 9l-7 7-7-7"
+                                                />
+                                            </svg>
+                                        </button>
+
+                                        <div
+                                            v-if="isActivityDropdownOpen"
+                                            class="absolute z-[60] w-full mt-1.5 bg-white border border-gray-200 rounded-2xl shadow-xl overflow-hidden py-1 animate-in fade-in slide-in-from-top-1 duration-150"
+                                        >
+                                            <div
+                                                v-for="act in activityOptions"
+                                                :key="act.label"
+                                                @click="
+                                                    selectedActivity = act;
+                                                    isActivityDropdownOpen = false;
+                                                "
+                                                class="px-[25px] py-2 text-[14px] cursor-pointer transition-colors duration-150 flex items-center justify-between hover:bg-gray-50 hover:text-[#6a53f2]"
+                                                :class="
+                                                    selectedActivity?.label ===
+                                                    act.label
+                                                        ? 'bg-indigo-50 text-[#6a53f2] font-semibold'
+                                                        : 'text-gray-700'
+                                                "
+                                            >
+                                                {{ act.label }}
+                                                <span
+                                                    class="text-xs font-mono text-gray-400"
+                                                    >({{ act.w_m2 }} w/m²)</span
+                                                >
+                                            </div>
+                                        </div>
+                                    </div>
                                 </div>
                             </div>
                         </div>
 
                         <div
-                            class="mt-6 pt-4 border-t border-gray-100 flex justify-between text-xs text-gray-400"
+                            class="mt-8 pt-5 border-t border-gray-200 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 font-sans"
                         >
-                            <p class="flex items-baseline">
-                                Total Insulation :
-                                <span
-                                    class="text-gray-800 font-bold text-lg ms-1.5 font-sans"
-                                    >{{ totalClo.toFixed(2) }} Clo</span
+                            <div class="space-y-3 w-full sm:w-auto">
+                                <div
+                                    class="flex items-center text-[14px] text-gray-600 font-medium"
                                 >
-                            </p>
-                            <p class="flex items-baseline">
-                                Metabolic Rate :
-                                <span
-                                    class="text-gray-800 font-bold text-lg ms-1.5 font-sans"
+                                    <span
+                                        class="w-[120px] shrink-0 text-gray-500"
+                                        >Total Insulation</span
+                                    >
+                                    <span class="text-gray-300 mx-1">:</span>
+                                    <span
+                                        class="text-gray-900 font-bold text-[15px] px-3 py-0.5 font-sans shadow-sm tracking-wide"
+                                    >
+                                        {{ totalClo.toFixed(2) }} Clo
+                                    </span>
+                                </div>
+                                <div
+                                    class="flex items-center text-[14px] text-gray-600 font-medium"
                                 >
-                                    {{
-                                        selectedActivity
-                                            ? selectedActivity.w_m2
-                                            : "0.00"
-                                    }}
-                                    w/m²
-                                </span>
-                            </p>
+                                    <span
+                                        class="w-[120px] shrink-0 text-gray-500"
+                                        >Metabolic Rate</span
+                                    >
+                                    <span class="text-gray-300 mx-1">:</span>
+                                    <span
+                                        class="text-gray-900 font-bold text-[15px] px-3 py-0.5 font-sans shadow-sm tracking-wide"
+                                    >
+                                        {{
+                                            selectedActivity
+                                                ? selectedActivity.w_m2
+                                                : "0.00"
+                                        }}
+                                        w/m²
+                                    </span>
+                                </div>
+                            </div>
+
+                            <div
+                                class="w-full sm:w-auto shrink-0 flex sm:justify-end"
+                            >
+                                <button
+                                    @click="toggleLogging"
+                                    type="button"
+                                    :class="
+                                        isLogging
+                                            ? 'bg-red-500 hover:bg-red-600'
+                                            : 'bg-[#6a53f2] hover:bg-[#583fe4]'
+                                    "
+                                    class="w-full sm:w-[160px] h-[40px] shrink-0 flex-none text-white text-[14px] font-bold flex items-center justify-center rounded-3xl border-none transition-all duration-200 cursor-pointer shadow-md uppercase tracking-wider font-sans"
+                                >
+                                    {{ isLogging ? "Cancel" : "Input" }}
+                                </button>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -339,11 +594,13 @@ const toggleModal = () => (isModalOpen.value = !isModalOpen.value);
             v-if="isModalOpen"
             class="fixed inset-0 bg-black/60 flex items-center justify-center p-4 z-[100] backdrop-blur-sm"
         >
-            <div class="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl">
+            <div
+                class="bg-white rounded-[30px] max-w-md w-full p-6 shadow-2xl border border-gray-100 font-sans"
+            >
                 <div
                     class="flex justify-between items-center border-b pb-3 mb-4"
                 >
-                    <h3 class="text-lg font-bold text-gray-800">
+                    <h3 class="text-lg font-bold text-[#333]">
                         Environmental Sensors Report
                     </h3>
                     <span
@@ -352,134 +609,88 @@ const toggleModal = () => (isModalOpen.value = !isModalOpen.value);
                         Unit ID: {{ liveWorkerData?.id || "?" }}
                     </span>
                 </div>
-
-                <div class="space-y-3.5 max-h-[400px] overflow-y-auto pr-1">
+                <div class="space-y-3 max-h-[380px] overflow-y-auto pr-1">
                     <div
-                        class="flex justify-between items-center bg-gray-50 p-3 rounded-xl border border-gray-100"
+                        class="flex justify-between items-center bg-gray-50 p-3 rounded-xl border border-gray-100 px-5"
                     >
-                        <span class="text-gray-500 text-xs font-semibold"
-                            >Kecepatan Udara</span
+                        <span
+                            class="text-gray-500 text-xs font-semibold uppercase tracking-wider"
+                            >Air Speed</span
                         >
-                        <div class="flex items-center space-x-2">
-                            <span
-                                class="font-mono font-black text-gray-800 text-sm"
-                                >{{ calculatedMetrics.v.toFixed(2) }} m/s</span
-                            >
-                            <span class="text-red-400 font-black text-xs"
-                                >↙</span
-                            >
-                        </div>
+                        <span class="font-mono font-black text-[#333] text-sm"
+                            >{{ calculatedMetrics.v.toFixed(2) }} m/s</span
+                        >
                     </div>
-
                     <div
-                        class="flex justify-between items-center bg-gray-50 p-3 rounded-xl border border-gray-100"
+                        class="flex justify-between items-center bg-gray-50 p-3 rounded-xl border border-gray-100 px-5"
                     >
-                        <span class="text-gray-500 text-xs font-semibold"
-                            >Suhu Basah</span
+                        <span
+                            class="text-gray-500 text-xs font-semibold uppercase tracking-wider"
+                            >Wet Temperature</span
                         >
-                        <div class="flex items-center space-x-2">
-                            <span
-                                class="font-mono font-black text-gray-800 text-sm"
-                                >{{ calculatedMetrics.twb.toFixed(2) }} °C</span
-                            >
-                            <span class="text-gray-400 font-black text-xs"
-                                >=</span
-                            >
-                        </div>
+                        <span class="font-mono font-black text-[#333] text-sm"
+                            >{{ calculatedMetrics.twb.toFixed(2) }} °C</span
+                        >
                     </div>
-
                     <div
-                        class="flex justify-between items-center bg-gray-50 p-3 rounded-xl border border-gray-100"
+                        class="flex justify-between items-center bg-gray-50 p-3 rounded-xl border border-gray-100 px-5"
                     >
-                        <span class="text-gray-500 text-xs font-semibold"
-                            >Suhu Kering</span
+                        <span
+                            class="text-gray-500 text-xs font-semibold uppercase tracking-wider"
+                            >Dry Temperature</span
                         >
-                        <div class="flex items-center space-x-2">
-                            <span
-                                class="font-mono font-black text-gray-800 text-sm"
-                                >{{ calculatedMetrics.ta.toFixed(1) }} °C</span
-                            >
-                            <span class="text-gray-400 font-black text-xs"
-                                >=</span
-                            >
-                        </div>
+                        <span class="font-mono font-black text-[#333] text-sm"
+                            >{{ calculatedMetrics.ta.toFixed(1) }} °C</span
+                        >
                     </div>
-
                     <div
-                        class="flex justify-between items-center bg-gray-50 p-3 rounded-xl border border-gray-100"
+                        class="flex justify-between items-center bg-gray-50 p-3 rounded-xl border border-gray-100 px-5"
                     >
-                        <span class="text-gray-500 text-xs font-semibold"
-                            >Suhu Radiasi (MRT)</span
+                        <span
+                            class="text-gray-500 text-xs font-semibold uppercase tracking-wider"
+                            >Radiation Temperature</span
                         >
-                        <div class="flex items-center space-x-2">
-                            <span
-                                class="font-mono font-black text-gray-800 text-sm"
-                                >{{ calculatedMetrics.tr.toFixed(2) }} °C</span
-                            >
-                            <span class="text-green-400 font-black text-xs"
-                                >↗</span
-                            >
-                        </div>
+                        <span class="font-mono font-black text-[#333] text-sm"
+                            >{{ calculatedMetrics.tr.toFixed(2) }} °C</span
+                        >
                     </div>
-
                     <div
-                        class="flex justify-between items-center bg-gray-50 p-3 rounded-xl border border-gray-100"
+                        class="flex justify-between items-center bg-gray-50 p-3 rounded-xl border border-gray-100 px-5"
                     >
-                        <span class="text-gray-500 text-xs font-semibold"
-                            >Kelembapan Udara</span
+                        <span
+                            class="text-gray-500 text-xs font-semibold uppercase tracking-wider"
+                            >Air Humidity</span
                         >
-                        <div class="flex items-center space-x-2">
-                            <span
-                                class="font-mono font-black text-gray-800 text-sm"
-                                >{{ calculatedMetrics.rh.toFixed(0) }} %</span
-                            >
-                            <span class="text-green-400 font-black text-xs"
-                                >↗</span
-                            >
-                        </div>
+                        <span class="font-mono font-black text-[#333] text-sm"
+                            >{{ calculatedMetrics.rh.toFixed(0) }} %</span
+                        >
                     </div>
-
                     <div
-                        class="flex justify-between items-center bg-gray-50 p-3 rounded-xl border border-gray-100"
+                        class="flex justify-between items-center bg-gray-50 p-3 rounded-xl border border-gray-100 px-5"
                     >
-                        <span class="text-gray-500 text-xs font-semibold"
-                            >Volume Oksigen</span
+                        <span
+                            class="text-gray-500 text-xs font-semibold uppercase tracking-wider"
+                            >Oxygen Volume</span
                         >
-                        <div class="flex items-center space-x-2">
-                            <span
-                                class="font-mono font-black text-gray-800 text-sm"
-                                >{{
-                                    calculatedMetrics.o2.toFixed(1)
-                                }}
-                                %vol</span
-                            >
-                            <span class="text-red-400 font-black text-xs"
-                                >↙</span
-                            >
-                        </div>
+                        <span class="font-mono font-black text-[#333] text-sm"
+                            >{{ calculatedMetrics.o2.toFixed(1) }} %vol</span
+                        >
                     </div>
-
                     <div
-                        class="flex justify-between items-center bg-gray-50 p-3 rounded-xl border border-gray-100"
+                        class="flex justify-between items-center bg-gray-50 p-3 rounded-xl border border-gray-100 px-5"
                     >
-                        <span class="text-gray-500 text-xs font-semibold"
-                            >Volume Gas (CO)</span
+                        <span
+                            class="text-gray-500 text-xs font-semibold uppercase tracking-wider"
+                            >Carbon Monoxide Volume</span
                         >
-                        <div class="flex items-center space-x-2">
-                            <span
-                                class="font-mono font-black text-gray-800 text-sm"
-                                >{{ calculatedMetrics.co.toFixed(0) }} PPM</span
-                            >
-                            <span class="text-red-400 font-black text-xs"
-                                >↙</span
-                            >
-                        </div>
+                        <span class="font-mono font-black text-[#333] text-sm"
+                            >{{ calculatedMetrics.co.toFixed(0) }} PPM</span
+                        >
                     </div>
                 </div>
-
                 <button
                     @click="toggleModal"
-                    class="mt-5 w-full bg-gray-900 text-white py-2.5 rounded-xl font-bold text-sm hover:bg-black transition"
+                    class="mt-5 w-full bg-gray-900 text-white py-2.5 rounded-2xl font-bold text-sm hover:bg-black transition cursor-pointer uppercase tracking-wider h-[40px]"
                 >
                     Close Report
                 </button>
