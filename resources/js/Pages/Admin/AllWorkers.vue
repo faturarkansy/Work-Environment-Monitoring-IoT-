@@ -1,7 +1,7 @@
 <script setup>
 import AuthenticatedLayout from "@/Layouts/AuthenticatedLayout.vue";
 import { Head } from "@inertiajs/vue3";
-import { ref, computed, onMounted, onUnmounted } from "vue";
+import { ref, computed, onMounted, onUnmounted, nextTick } from "vue";
 import { Line } from "vue-chartjs";
 import {
     Chart as ChartJS,
@@ -28,11 +28,12 @@ ChartJS.register(
 
 const props = defineProps({
     workers: Array,
-    latestLogs: Array, // Menerima data log awal dari AdminController
+    latestLogs: Array,
 });
 
 // --- STATE SLIDESHOW AUTOMATION ---
 const currentIndex = ref(0);
+const countdown = ref(10);
 let slideshowInterval = null;
 
 // --- STATE HISTORI GRAFIK SLIDESHOW REAL-TIME ---
@@ -40,70 +41,89 @@ const chartLabels = ref([]);
 const pmvHistory = ref([]);
 const ppdHistory = ref([]);
 
-// Mengambil data pekerja aktif saat ini berdasarkan perputaran indeks
-const currentWorker = computed(() => {
-    if (!props.workers || props.workers.length === 0) return null;
-    return props.workers[currentIndex.value];
+// --- STATE MEMORY UNTUK DATA SENSOR & STATUS WORKER ---
+const ambientData = ref({
+    airSpeed: 0,
+    MRT: 0,
+    Tdb: 0,
+    Twb: 0,
+    RH: 0,
+    O2: 0,
+    CO: 0,
+});
+const workerStates = ref({});
+
+// 🔑 1. FUNGSI FILTER BARU: Menyaring secara ketat agar hanya mengambil user dengan role 'worker'
+const filteredWorkers = computed(() => {
+    if (!props.workers || !Array.isArray(props.workers)) return [];
+    return props.workers.filter((worker) => worker.role === "worker");
 });
 
-// Mengaitkan data sensor live berdasarkan unit_id pekerja yang sedang aktif
-const liveWorkerData = ref(null);
+// 🔑 2. SINKRONISASI INDEKS: Mengambil data pekerja aktif dari hasil array yang sudah disaring
+const currentWorker = computed(() => {
+    if (filteredWorkers.value.length === 0) return null;
+    return filteredWorkers.value[currentIndex.value];
+});
 
 // Sinkronisasi data sensor ketika giliran pekerja berganti + Reset Histori Grafik
 const updateLiveSensorData = () => {
     if (!currentWorker.value) return;
 
-    // Reset array grafik agar tidak tercampur dengan data pekerja sebelumnya
     chartLabels.value = [];
     pmvHistory.value = [];
     ppdHistory.value = [];
 
-    // Cari log awal dari database props yang unit_id-nya sama dengan ID pekerja
-    const matchedLog = props.latestLogs.find(
-        (log) => log.unit_id == currentWorker.value.id,
-    );
-    liveWorkerData.value = matchedLog || null;
-
-    // Masukkan entri poin awal jika log ditemukan
-    if (liveWorkerData.value) {
+    const activeWorkerState = workerStates.value[currentWorker.value.id];
+    if (activeWorkerState) {
         const sekarang = new Date().toLocaleTimeString([], {
             hour: "2-digit",
             minute: "2-digit",
             second: "2-digit",
         });
         chartLabels.value.push(sekarang);
-        pmvHistory.value.push(safeParse(calculatedMetrics.value.pmv));
-        ppdHistory.value.push(safeParse(calculatedMetrics.value.ppd));
+        pmvHistory.value.push(activeWorkerState.pmv);
+        ppdHistory.value.push(activeWorkerState.ppd);
     }
 };
 
 // --- FUNGSI SANITASI DATA PAYLOAD ---
 const safeParse = (val) => {
     const parsed = parseFloat(val);
-    if (isNaN(parsed) || !isFinite(parsed)) {
-        return 0.0;
-    }
-    return parsed;
+    return isNaN(parsed) || !isFinite(parsed) ? 0.0 : parsed;
 };
 
-// --- LOGIKA REAL-TIME (LARAVEL ECHO) ---
+// --- LOGIKA REAL-TIME (LARAVEL ECHO + TIMERS) ---
 onMounted(() => {
+    if (props.latestLogs && Array.isArray(props.latestLogs)) {
+        props.latestLogs.forEach((log) => {
+            if (log && log.user_id) {
+                workerStates.value[log.user_id] = {
+                    pmv: safeParse(log.pmv),
+                    ppd: safeParse(log.ppd),
+                    clothing_insulation: safeParse(log.clothing_insulation),
+                    activity_name: log.activity_name || "Unknown",
+                    activity_met: safeParse(log.activity_met),
+                };
+            }
+        });
+    }
+
     updateLiveSensorData();
 
-    // Jalankan perputaran otomatis slideshow setiap 10 detik
+    // 🔑 3. SINKRONISASI TIMER INTERVAL: slideshow berputar mengacu pada panjang filteredWorkers
     slideshowInterval = setInterval(() => {
-        if (props.workers && props.workers.length > 0) {
-            currentIndex.value =
-                (currentIndex.value + 1) % props.workers.length;
-            updateLiveSensorData();
-            console.log(
-                "[SLIDESHOW] Beralih ke Pekerja:",
-                currentWorker.value.name,
-            );
+        if (filteredWorkers.value.length > 0) {
+            countdown.value--;
+            if (countdown.value <= 0) {
+                currentIndex.value =
+                    (currentIndex.value + 1) % filteredWorkers.value.length;
+                updateLiveSensorData();
+                countdown.value = 10;
+            }
         }
-    }, 10000);
+    }, 1000);
 
-    // Mendengarkan transmisi data WebSocket MQTT secara real-time
+    // Echo Pipeline
     if (window.Echo) {
         window.Echo.channel("environment-monitor").listen(
             ".data.received",
@@ -111,45 +131,68 @@ onMounted(() => {
                 const payload = e.data;
                 if (!payload) return;
 
-                // Jika data MQTT yang masuk memiliki ID Unit yang sama dengan pekerja yang aktif
-                if (
-                    currentWorker.value &&
-                    payload.id == currentWorker.value.id
-                ) {
-                    liveWorkerData.value = {
-                        airSpeed: safeParse(payload.airSpeed),
-                        MRT: safeParse(payload.MRT),
-                        Tdb: safeParse(payload.Tdb),
-                        Twb: safeParse(payload.Twb),
-                        RH: safeParse(payload.RH),
-                        O2: safeParse(payload.O2),
-                        CO: safeParse(payload.CO),
-                        clo:
-                            payload.clo !== undefined
-                                ? safeParse(payload.clo)
-                                : null,
-                        met:
-                            payload.met !== undefined
-                                ? safeParse(payload.met)
-                                : null,
+                if (payload.id && !payload.user_id) {
+                    ambientData.value = {
+                        airSpeed: safeParse(
+                            payload.airSpeed || payload.air_speed,
+                        ),
+                        MRT: safeParse(payload.MRT || payload.mrt),
+                        Tdb: safeParse(payload.Tdb || payload.tdb),
+                        Twb: safeParse(payload.Twb || payload.twb),
+                        RH: safeParse(payload.RH || payload.rh),
+                        O2: safeParse(payload.O2 || payload.o2),
+                        CO: safeParse(payload.CO || payload.co),
                     };
 
-                    // Push data ke grafik per detiknya secara realtime
-                    const sekarang = new Date().toLocaleTimeString([], {
-                        hour: "2-digit",
-                        minute: "2-digit",
-                        second: "2-digit",
-                    });
-                    chartLabels.value.push(sekarang);
-                    chartLabels.value.push(sekarang);
-                    pmvHistory.value.push(calculatedMetrics.value.pmv);
-                    ppdHistory.value.push(calculatedMetrics.value.ppd);
+                    if (currentWorker.value) {
+                        const sekarang = new Date().toLocaleTimeString([], {
+                            hour: "2-digit",
+                            minute: "2-digit",
+                            second: "2-digit",
+                        });
+                        chartLabels.value.push(sekarang);
 
-                    // Batasi titik maksimum grafik 10 pergeseran
-                    if (chartLabels.value.length > 10) {
-                        chartLabels.value.shift();
-                        pmvHistory.value.shift();
-                        ppdHistory.value.shift();
+                        const activeState = workerStates.value[
+                            currentWorker.value.id
+                        ] || { pmv: 0, ppd: 0 };
+                        pmvHistory.value.push(activeState.pmv);
+                        ppdHistory.value.push(activeState.ppd);
+
+                        if (chartLabels.value.length > 10) {
+                            chartLabels.value.shift();
+                            pmvHistory.value.shift();
+                            ppdHistory.value.shift();
+                        }
+                    }
+                } else if (payload && payload.user_id) {
+                    workerStates.value[payload.user_id] = {
+                        pmv: safeParse(payload.pmv),
+                        ppd: safeParse(payload.ppd),
+                        clothing_insulation: safeParse(
+                            payload.clothing_insulation,
+                        ),
+                        activity_name: payload.activity_name || "Unknown",
+                        activity_met: safeParse(payload.activity_met),
+                    };
+
+                    if (
+                        currentWorker.value &&
+                        payload.user_id == currentWorker.value.id
+                    ) {
+                        const sekarang = new Date().toLocaleTimeString([], {
+                            hour: "2-digit",
+                            minute: "2-digit",
+                            second: "2-digit",
+                        });
+                        chartLabels.value.push(sekarang);
+                        pmvHistory.value.push(safeParse(payload.pmv));
+                        ppdHistory.value.push(safeParse(payload.ppd));
+
+                        if (chartLabels.value.length > 10) {
+                            chartLabels.value.shift();
+                            pmvHistory.value.shift();
+                            ppdHistory.value.shift();
+                        }
                     }
                 }
             },
@@ -163,99 +206,47 @@ onUnmounted(() => {
 
 const isModalOpen = ref(false);
 
-// --- CLOTHING & METABOLIC FALLBACK KONDISIONAL (0 JIKA KOSONG) ---
 const totalClo = computed(() => {
-    if (
-        liveWorkerData.value &&
-        liveWorkerData.value.clo !== null &&
-        liveWorkerData.value.clo !== undefined
-    ) {
-        return liveWorkerData.value.clo;
+    if (currentWorker.value && workerStates.value[currentWorker.value.id]) {
+        return workerStates.value[currentWorker.value.id].clothing_insulation;
     }
-    return 0.0; // Nilai default 0 yang ditampilkan ke UI Admin
+    return 0.0;
 });
 
 const currentMetabolicRate = computed(() => {
-    if (
-        liveWorkerData.value &&
-        liveWorkerData.value.met !== null &&
-        liveWorkerData.value.met !== undefined
-    ) {
-        return liveWorkerData.value.met;
+    if (currentWorker.value && workerStates.value[currentWorker.value.id]) {
+        return workerStates.value[currentWorker.value.id].activity_met;
     }
-    return 0.0; // Nilai default 0 yang ditampilkan ke UI Admin
+    return 0.0;
 });
 
-// --- PERHITUNGAN PMV & PPD PEKERJA DINAMIS ---
 const calculatedMetrics = computed(() => {
-    if (!liveWorkerData.value)
-        return {
-            pmv: 0,
-            ppd: 0,
-            ta: 0,
-            rh: 0,
-            v: 0,
-            tr: 0,
-            twb: 0,
-            o2: 0,
-            co: 0,
-        };
+    const ambient = ambientData.value;
+    const worker = currentWorker.value
+        ? workerStates.value[currentWorker.value.id]
+        : null;
 
-    const s = liveWorkerData.value;
-
-    const ta = safeParse(s.Tdb !== undefined ? s.Tdb : s.tdb);
-    const rh = safeParse(s.RH !== undefined ? s.RH : s.rh);
-    const v = safeParse(s.airSpeed !== undefined ? s.airSpeed : s.air_speed);
-    const tr = safeParse(s.MRT !== undefined ? s.MRT : s.mrt || ta);
-    const twb = safeParse(s.Twb !== undefined ? s.Twb : s.twb);
-    const o2 = safeParse(s.O2 !== undefined ? s.O2 : s.o2);
-    const co = safeParse(s.CO !== undefined ? s.CO : s.co);
-
-    // Untuk internal kalkulasi rumus, gunakan minimal 0.01 jika bernilai 0 agar fungsi matematika tidak rusak (division by zero)
-    const Icl = totalClo.value === 0 ? 0.01 : totalClo.value;
-    const M =
-        currentMetabolicRate.value === 0 ? 40.0 : currentMetabolicRate.value; // Fallback ke batas terendah met (Sleeping/Rest) jika 0
-
-    const fcl = Icl < 0.5 ? 1.0 + 0.2 * Icl : 1.05 + 0.1 * Icl;
-    const pa =
-        (rh / 100) * 0.6105 * Math.exp((17.27 * ta) / (ta + 237.3)) * 1000;
-    let tcl = ta + (35.5 - ta) / (3.5 * Icl + 0.1);
-    const hc = Math.max(
-        2.38 * Math.pow(Math.abs(tcl - ta), 0.25),
-        12.1 * Math.sqrt(v),
-    );
-    const ts = 0.303 * Math.exp(-0.036 * M) + 0.028;
-    const radiation =
-        3.96 *
-        Math.pow(10, -8) *
-        fcl *
-        (Math.pow(tcl + 273, 4) - Math.pow(tr + 273, 4));
-    const convection = fcl * hc * (tcl - ta);
-    const evaporation = 3.05 * Math.pow(10, -3) * (5733 - 6.99 * M - pa);
-    const sweat = 0.42 * (M - 58.15);
-    const resp_latent = 1.7 * Math.pow(10, -5) * M * (5867 - pa);
-    const resp_sensible = 0.0014 * M * (34 - ta);
-
-    const L =
-        M -
-        evaporation -
-        sweat -
-        resp_latent -
-        resp_sensible -
-        radiation -
-        convection;
-    const pmv = ts * L;
-    const ppd =
-        100 -
-        95 *
-            Math.exp(-(0.03353 * Math.pow(pmv, 4) + 0.2179 * Math.pow(pmv, 2)));
-
-    return { pmv, ppd, ta, rh, v, tr, twb, o2, co };
+    return {
+        pmv: worker ? worker.pmv : 0,
+        ppd: worker ? worker.ppd : 0,
+        clothing_insulation: worker ? worker.clothing_insulation : 0,
+        activity_name: worker ? worker.activity_name : "Not Inputted Yet",
+        activity_met: worker ? worker.activity_met : 0,
+        ta: ambient.Tdb,
+        rh: ambient.RH,
+        v: ambient.airSpeed,
+        tr: ambient.MRT,
+        twb: ambient.Twb,
+        o2: ambient.O2,
+        co: ambient.CO,
+    };
 });
 
-// --- STATUS GRADASI WARNA METRICS (BERDASARKAN NILAI PMV) ---
 const environmentStatus = computed(() => {
+    if (!currentWorker.value) return { label: "Waiting...", color: "#9ca3af" };
+
     const p = calculatedMetrics.value.pmv;
+
     if (p <= 0.5 && p >= -0.5)
         return {
             label: "Neutral",
@@ -286,15 +277,15 @@ const environmentStatus = computed(() => {
             label: "Cool",
             color: "linear-gradient(135deg, #3b82f6 50%, #1d4ed8 100%)",
         };
+
     return {
-        label: "Cold",
+        label: "Cold / Unknown",
         color: "linear-gradient(135deg, #1e3a8a 50%, #172554 100%)",
     };
 });
 
 const toggleModal = () => (isModalOpen.value = !isModalOpen.value);
 
-// --- CONFIG CHART OPTIONS ---
 const pmvLineData = computed(() => ({
     labels: [...chartLabels.value],
     datasets: [
@@ -347,25 +338,28 @@ const ppdChartOptions = {
     <Head title="All Workers Monitor" />
 
     <AuthenticatedLayout>
-        <div class="p-6 bg-gray-100 h-auto">
+        <div class="p-6 bg-gray-100 h-auto font-sans">
             <div
                 v-if="currentWorker"
                 class="hidden lg:grid grid-cols-5 gap-4 auto-rows-min"
             >
                 <div
-                    class="col-span-2 row-span-1 bg-white px-6 py-1 rounded-2xl shadow-sm flex items-center self-start min-h-[35px]"
+                    class="col-span-2 row-span-1 bg-white px-6 py-1 rounded-2xl shadow-sm flex items-center self-start min-h-[30px]"
                 >
-                    <span class="text-black font-bold text-sm mr-4 shrink-0"
-                        >Active Auto-Slideshow :</span
+                    <span class="text-black font-bold text-base mr-4 shrink-0"
+                        >Worker Name :</span
                     >
-                    <div class="flex space-x-2 font-bold items-center">
-                        <span
-                            class="text-xs font-semibold px-3 py-1 bg-indigo-100 text-indigo-700 rounded-full"
+                    <div class="flex space-x-4 font-bold items-center">
+                        <div
+                            class="bg-indigo-100 text-indigo-700 px-6 py-1 rounded-full text-base transition shadow-sm"
                         >
-                            Pekerja {{ currentIndex + 1 }} dari
-                            {{ workers.length }}
-                        </span>
+                            {{ currentWorker.name }}
+                        </div>
                     </div>
+                    <span class="text-gray-500 font-bold text-sm ml-auto">
+                        Pekerja {{ currentIndex + 1 }} dari
+                        {{ filteredWorkers.length }}
+                    </span>
                 </div>
 
                 <div
@@ -376,7 +370,7 @@ const ppdChartOptions = {
                     </p>
                     <div class="flex justify-between items-center">
                         <h3 class="text-3xl font-bold">
-                            {{ calculatedMetrics.v.toFixed(2) }} m/s
+                            {{ ambientData.airSpeed.toFixed(2) }} m/s
                         </h3>
                         <div class="w-4 h-4 text-gray-400 font-bold text-xl">
                             =
@@ -392,7 +386,7 @@ const ppdChartOptions = {
                     </p>
                     <div class="flex justify-between items-center">
                         <h3 class="text-3xl font-bold">
-                            {{ calculatedMetrics.twb.toFixed(2) }} &deg;C
+                            {{ ambientData.Twb.toFixed(2) }} &deg;C
                         </h3>
                         <div class="w-4 h-4 text-gray-400 font-bold text-xl">
                             =
@@ -408,7 +402,7 @@ const ppdChartOptions = {
                     </p>
                     <div class="flex justify-between items-center">
                         <h3 class="text-3xl font-bold">
-                            {{ calculatedMetrics.ta.toFixed(1) }} &deg;C
+                            {{ ambientData.Tdb.toFixed(1) }} &deg;C
                         </h3>
                         <div class="w-4 h-4 text-gray-400 font-bold text-xl">
                             =
@@ -421,40 +415,45 @@ const ppdChartOptions = {
                     :style="{ background: environmentStatus.color }"
                 >
                     <div class="text-white">
-                        <p
-                            class="text-[10px] uppercase font-black opacity-75 tracking-wider"
-                        >
-                            Pekerja Dipantau :
+                        <p class="text-lg opacity-90 font-medium">
+                            Thermal Comfort Status :
                         </p>
-                        <h2
-                            class="text-2xl font-black mb-2 truncate border-b border-white/20 pb-1"
-                        >
-                            {{ currentWorker.name }}
-                        </h2>
-                        <p class="text-sm font-bold opacity-90">
-                            Work Environment Status :
-                        </p>
-                        <h2 class="text-3xl font-bold mt-1">
+                        <h2 class="text-3xl font-bold mt-2 tracking-tight">
                             {{ environmentStatus.label }}
                         </h2>
-                        <div class="flex space-x-4 mt-2">
-                            <p class="text-xs opacity-90 font-mono">
+                        <div class="flex space-x-4 mt-1">
+                            <p class="text-base opacity-75 font-mono">
                                 PMV Index:
-                                {{ calculatedMetrics.pmv.toFixed(2) }}
-                            </p>
-                            <p class="text-xs opacity-90 font-mono">
-                                PPD Index:
-                                {{ calculatedMetrics.ppd.toFixed(2) }}%
+                                {{
+                                    (
+                                        workerStates[currentWorker.id]?.pmv || 0
+                                    ).toFixed(2)
+                                }}
+                                | PPD Index:
+                                {{
+                                    (
+                                        workerStates[currentWorker.id]?.ppd || 0
+                                    ).toFixed(2)
+                                }}%
                             </p>
                         </div>
                     </div>
+
                     <div
-                        class="bg-white/20 text-sm py-1 px-4 rounded-xl text-center backdrop-blur-sm border border-white/10"
+                        class="bg-white/90 text-sm py-1.5 px-4 rounded-xl text-center backdrop-blur-sm mt-4 shadow-sm"
                     >
-                        <span
-                            class="font-sans font-bold text-xs text-white uppercase tracking-wider"
-                            >Slideshow Mode (10s Loop)</span
+                        <div
+                            class="font-sans font-bold text-[14px] text-gray-800 flex items-center justify-center gap-1.5"
                         >
+                            <span
+                                class="w-2 h-2 rounded-full bg-indigo-500 animate-pulse shrink-0"
+                            ></span>
+                            Next Slide in
+                            <span
+                                class="font-mono font-black text-base text-indigo-700"
+                                >{{ countdown }}s</span
+                            >
+                        </div>
                     </div>
                 </div>
 
@@ -466,7 +465,7 @@ const ppdChartOptions = {
                     </p>
                     <div class="flex justify-between items-center">
                         <h3 class="text-3xl font-bold">
-                            {{ calculatedMetrics.tr.toFixed(2) }} &deg;C
+                            {{ ambientData.MRT.toFixed(2) }} &deg;C
                         </h3>
                         <div class="w-4 h-4 text-gray-400 font-bold text-xl">
                             =
@@ -482,7 +481,7 @@ const ppdChartOptions = {
                     </p>
                     <div class="flex justify-between items-center">
                         <h3 class="text-3xl font-bold">
-                            {{ calculatedMetrics.rh.toFixed(0) }} %
+                            {{ ambientData.RH.toFixed(0) }} %
                         </h3>
                         <div class="w-4 h-4 text-gray-400 font-bold text-xl">
                             =
@@ -498,7 +497,7 @@ const ppdChartOptions = {
                     </p>
                     <div class="flex justify-between items-center">
                         <h3 class="text-3xl font-bold">
-                            {{ calculatedMetrics.o2.toFixed(1) }} %vol
+                            {{ ambientData.O2.toFixed(1) }} %vol
                         </h3>
                         <div class="w-4 h-4 text-gray-400 font-bold text-xl">
                             =
@@ -516,10 +515,25 @@ const ppdChartOptions = {
                             <h3 class="text-gray-800 text-sm font-bold">
                                 PMV Real-time Index Movement
                             </h3>
-                            <span class="text-[10px] text-gray-400 font-mono"
-                                >Clo: {{ totalClo }} | Met:
-                                {{ currentMetabolicRate }}</span
+                            <span
+                                class="text-[11px] text-indigo-600 bg-indigo-50 px-2.5 py-0.5 rounded-full font-mono font-bold"
                             >
+                                Clo:
+                                {{
+                                    workerStates[currentWorker.id]
+                                        ?.clothing_insulation || "0.00"
+                                }}
+                                |
+                                {{
+                                    workerStates[currentWorker.id]
+                                        ?.activity_name || "Not Inputted Yet"
+                                }}
+                                ({{
+                                    workerStates[currentWorker.id]
+                                        ?.activity_met || 0
+                                }}
+                                W/m²)
+                            </span>
                         </div>
                         <div class="h-56">
                             <Line
@@ -536,10 +550,20 @@ const ppdChartOptions = {
                             <h3 class="text-gray-800 text-sm font-bold">
                                 PPD Real-time Movement Index (%)
                             </h3>
-                            <span class="text-[10px] text-gray-400 font-mono"
-                                >Clo: {{ totalClo }} | Met:
-                                {{ currentMetabolicRate }}</span
+                            <span
+                                class="text-[11px] text-rose-600 bg-rose-50 px-2.5 py-0.5 rounded-full font-mono font-bold"
                             >
+                                Clo:
+                                {{
+                                    workerStates[currentWorker.id]
+                                        ?.clothing_insulation || "0.00"
+                                }}
+                                |
+                                {{
+                                    workerStates[currentWorker.id]
+                                        ?.activity_name || "Not Inputted Yet"
+                                }}
+                            </span>
                         </div>
                         <div class="h-56">
                             <Line
@@ -558,7 +582,7 @@ const ppdChartOptions = {
                     </p>
                     <div class="flex justify-between items-center">
                         <h3 class="text-3xl font-bold">
-                            {{ calculatedMetrics.co.toFixed(0) }} PPM
+                            {{ ambientData.CO.toFixed(0) }} PPM
                         </h3>
                         <div class="w-4 h-4 text-gray-400 font-bold text-xl">
                             =
@@ -571,51 +595,8 @@ const ppdChartOptions = {
                 v-else
                 class="text-center py-12 text-gray-500 bg-white rounded-2xl shadow-sm p-6"
             >
-                Tidak ada data antrean pekerja yang aktif untuk disinkronisasi
-                ke slideshow dashboard.
-            </div>
-        </div>
-
-        <div
-            v-if="isModalOpen"
-            class="fixed inset-0 bg-black/60 flex items-center justify-center p-4 z-[100] backdrop-blur-sm"
-        >
-            <div class="bg-white rounded-3xl max-w-sm w-full p-8 shadow-2xl">
-                <h3 class="text-xl font-bold mb-6 text-gray-800 border-b pb-4">
-                    Detailed Unit Report
-                </h3>
-                <div class="space-y-4" v-if="liveWorkerData">
-                    <div class="flex justify-between items-center">
-                        <span class="text-gray-500 text-sm font-medium"
-                            >Air Speed</span
-                        >
-                        <span class="font-mono font-bold text-indigo-600"
-                            >{{ calculatedMetrics.v.toFixed(2) }} m/s</span
-                        >
-                    </div>
-                    <div class="flex justify-between items-center">
-                        <span class="text-gray-500 text-sm font-medium"
-                            >Mean Radiant Temp</span
-                        >
-                        <span class="font-mono font-bold text-indigo-600"
-                            >{{ calculatedMetrics.tr.toFixed(2) }} °C</span
-                        >
-                    </div>
-                    <div class="flex justify-between items-center">
-                        <span class="text-gray-500 text-sm font-medium"
-                            >CO Level</span
-                        >
-                        <span class="font-mono font-bold text-indigo-600"
-                            >{{ calculatedMetrics.co.toFixed(0) }} PPM</span
-                        >
-                    </div>
-                </div>
-                <button
-                    @click="toggleModal"
-                    class="mt-8 w-full bg-gray-900 text-white py-3 rounded-2xl font-bold"
-                >
-                    Close
-                </button>
+                Tidak ada data antrean pekerja aktif ber-role Worker untuk
+                disinkronisasi ke slideshow dashboard.
             </div>
         </div>
     </AuthenticatedLayout>

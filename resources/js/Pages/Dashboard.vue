@@ -10,24 +10,48 @@
                     <span class="text-black font-bold text-md mr-6 shrink-0"
                         >Filtered by :</span
                     >
+
                     <div class="flex space-x-4 font-bold items-center">
                         <button
-                            class="bg-indigo-500 text-white px-6 py-1.5 rounded-full text-sm transition shadow-sm"
+                            @click="selectedFilter = 'all'"
+                            :class="
+                                selectedFilter === 'all'
+                                    ? 'bg-indigo-500 text-white px-6 py-1.5 rounded-full text-sm transition shadow-sm cursor-pointer'
+                                    : 'text-gray-600 px-3 py-1.5 text-sm hover:text-indigo-500 transition cursor-pointer'
+                            "
                         >
                             All
                         </button>
+
                         <button
-                            class="text-gray-600 px-3 py-1.5 text-sm hover:text-indigo-500"
+                            @click="selectedFilter = '1'"
+                            :class="
+                                selectedFilter === '1'
+                                    ? 'bg-indigo-500 text-white px-6 py-1.5 rounded-full text-sm transition shadow-sm cursor-pointer'
+                                    : 'text-gray-600 px-3 py-1.5 text-sm hover:text-indigo-500 transition cursor-pointer'
+                            "
                         >
                             Unit 1
                         </button>
+
                         <button
-                            class="text-gray-600 px-3 py-1.5 text-sm hover:text-indigo-500"
+                            @click="selectedFilter = '2'"
+                            :class="
+                                selectedFilter === '2'
+                                    ? 'bg-indigo-500 text-white px-6 py-1.5 rounded-full text-sm transition shadow-sm cursor-pointer'
+                                    : 'text-gray-600 px-3 py-1.5 text-sm hover:text-indigo-500 transition cursor-pointer'
+                            "
                         >
                             Unit 2
                         </button>
+
                         <button
-                            class="text-gray-600 px-3 py-1.5 text-sm hover:text-indigo-500"
+                            @click="selectedFilter = '3'"
+                            :class="
+                                selectedFilter === '3'
+                                    ? 'bg-indigo-500 text-white px-6 py-1.5 rounded-full text-sm transition shadow-sm cursor-pointer'
+                                    : 'text-gray-600 px-3 py-1.5 text-sm hover:text-indigo-500 transition cursor-pointer'
+                            "
                         >
                             Unit 3
                         </button>
@@ -111,18 +135,18 @@
                         <p class="text-lg font-bold text-white opacity-90">
                             Thermal Safety Status :
                         </p>
-                        <h2 class="text-3xl font-bold mt-2">
+                        <h2 class="text-3xl font-bold mt-2 tracking-tight">
                             {{ environmentStatus.label }}
                         </h2>
                         <div class="flex space-x-4 mt-1">
-                            <p class="text-sm font-semibold opacity-95">
+                            <p class="text-base font-mono opacity-95">
                                 WBGT Index:
                                 {{ wbgtValue.toFixed(2) }} &deg;C
                             </p>
                         </div>
                     </div>
                     <div
-                        class="bg-white text-sm py-1 px-4 rounded-xl text-center backdrop-blur-sm"
+                        class="bg-white text-sm py-1 px-4 rounded-xl text-center backdrop-blur-sm mt-4"
                     >
                         <span class="font-mono font-bold text-lg text-gray-800"
                             >{{ currentTime }} WIB</span
@@ -579,6 +603,9 @@ const sensors = ref({
     O2: 0,
     CO: 0,
 });
+
+const selectedFilter = ref("all");
+
 const prevSensors = ref({
     airSpeed: 0,
     MRT: 0,

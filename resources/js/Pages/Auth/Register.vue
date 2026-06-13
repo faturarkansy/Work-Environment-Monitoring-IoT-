@@ -1,16 +1,26 @@
 <script setup>
+import { ref } from "vue"; // 🔑 Ditambahkan untuk mengatur buka/tutup dropdown
 import InputError from "@/Components/InputError.vue";
 import TextInput from "@/Components/TextInput.vue";
-import LottiePlayer from "@/Components/LottiePlayer.vue"; // Impor LottiePlayer agar serasi dengan Login
+import LottiePlayer from "@/Components/LottiePlayer.vue";
 import { Head, Link, useForm } from "@inertiajs/vue3";
 
 const form = useForm({
     name: "",
     email: "",
-    role: "worker", // Default role diatur ke worker
+    role: "worker", // Default tetap worker
     password: "",
     password_confirmation: "",
 });
+
+// State untuk mengontrol visibilitas pop-up dropdown
+const isDropdownOpen = ref(false);
+
+// Fungsi untuk memilih role dan menutup dropdown
+const selectRole = (value) => {
+    form.role = value;
+    isDropdownOpen.value = false;
+};
 
 const submit = () => {
     form.post(route("register"), {
@@ -39,7 +49,6 @@ const submit = () => {
                         alt="EnviMatework Logo"
                         class="h-[40px] mt-2 mr-3.5 transition-all duration-200 max-[950px]:h-[30px] max-[950px]:mt-0 max-[950px]:mr-2"
                     />
-
                     <div class="flex flex-col">
                         <span
                             class="text-[20px] mt-0.5 font-semibold text-[#333] font-sans"
@@ -49,7 +58,6 @@ const submit = () => {
                                 >M</span
                             >atework
                         </span>
-
                         <div
                             class="flex items-start gap-x-3 mt-1 max-[950px]:hidden"
                         >
@@ -79,7 +87,7 @@ const submit = () => {
                 class="flex-[0.9] flex justify-center items-center p-6 max-[950px]:p-5"
             >
                 <div
-                    class="bg-white w-full max-w-[400px] py-12 px-[35px] min-h-[350px] flex flex-col justify-center rounded-[35px] border border-gray-200 shadow-[0_0_4px_#00000040] max-[950px]:py-8 max-[950px]:px-7 max-[950px]:min-h-0"
+                    class="bg-white w-full max-w-[400px] py-12 px-[35px] min-h-[600px] flex flex-col justify-center rounded-[35px] border border-gray-200 shadow-[0_0_4px_#00000040] max-[950px]:py-8 max-[950px]:px-7 max-[950px]:min-h-0"
                 >
                     <h2 class="text-[28px] font-bold text-[#333] text-center">
                         Registration
@@ -130,18 +138,63 @@ const submit = () => {
 
                         <div>
                             <div class="relative mb-4">
-                                <select
-                                    id="role"
-                                    v-model="form.role"
-                                    class="w-full border border-[#ccd3dd] rounded-3xl px-[25px] h-[40px] transition-colors duration-200 focus:border-[#6a53f2] focus:ring-0 focus:outline-none bg-white text-[14px] text-[#333] appearance-none cursor-pointer"
-                                    required
+                                <button
+                                    type="button"
+                                    @click="isDropdownOpen = !isDropdownOpen"
+                                    class="w-full border border-[#ccd3dd] rounded-3xl px-[25px] h-[40px] transition-all duration-200 bg-white text-[14px] text-[#333] flex items-center justify-between focus:border-[#6a53f2] focus:outline-none cursor-pointer"
+                                    :class="{
+                                        'border-[#6a53f2] ring-2 ring-indigo-100':
+                                            isDropdownOpen,
+                                    }"
                                 >
-                                    <option value="" disabled hidden>
-                                        Register as...
-                                    </option>
-                                    <option value="worker">Worker</option>
-                                    <option value="admin">Admin</option>
-                                </select>
+                                    <span class="capitalize">{{
+                                        form.role || "Register as..."
+                                    }}</span>
+                                    <svg
+                                        class="w-4 h-4 text-gray-400 transition-transform duration-200"
+                                        :class="{
+                                            'rotate-180': isDropdownOpen,
+                                        }"
+                                        fill="none"
+                                        stroke="currentColor"
+                                        viewBox="0 0 24 24"
+                                    >
+                                        <path
+                                            stroke-linecap="round"
+                                            stroke-linejoin="round"
+                                            stroke-width="2"
+                                            d="M19 9l-7 7-7-7"
+                                        />
+                                    </svg>
+                                </button>
+
+                                <div
+                                    v-if="isDropdownOpen"
+                                    class="absolute z-50 w-full mt-1.5 bg-white border border-gray-200 rounded-2xl shadow-xl overflow-hidden py-1 animate-in fade-in slide-in-from-top-1 duration-150"
+                                >
+                                    <div
+                                        @click="selectRole('worker')"
+                                        class="px-[25px] py-2 text-[14px] cursor-pointer transition-colors duration-150 flex items-center justify-between"
+                                        :class="
+                                            form.role === 'worker'
+                                                ? 'bg-indigo-50 text-[#6a53f2] font-semibold'
+                                                : 'text-gray-700 hover:bg-gray-50 hover:text-[#6a53f2]'
+                                        "
+                                    >
+                                        Worker
+                                    </div>
+                                    <div
+                                        @click="selectRole('admin')"
+                                        class="px-[25px] py-2 text-[14px] cursor-pointer transition-colors duration-150 flex items-center justify-between"
+                                        :class="
+                                            form.role === 'admin'
+                                                ? 'bg-indigo-50 text-[#6a53f2] font-semibold'
+                                                : 'text-gray-700 hover:bg-gray-50 hover:text-[#6a53f2]'
+                                        "
+                                    >
+                                        Admin
+                                    </div>
+                                </div>
                                 <InputError
                                     class="mt-1"
                                     :message="form.errors.role"
@@ -185,10 +238,10 @@ const submit = () => {
                             </div>
                         </div>
 
-                        <div class="w-full">
+                        <div class="w-full flex justify-center">
                             <button
                                 type="submit"
-                                class="w-1/2 mx-auto flex items-center justify-center bg-[#6a53f2] text-white text-[15px] font-bold h-[40px] rounded-3xl border-none transition-colors duration-200 cursor-pointer hover:bg-[#583fe4]"
+                                class="w-1/2 shrink-0 bg-[#6a53f2] text-white text-[15px] font-bold h-[40px] flex items-center justify-center rounded-3xl border-none transition-colors duration-200 cursor-pointer hover:bg-[#583fe4]"
                                 :class="{ 'opacity-25': form.processing }"
                                 :disabled="form.processing"
                             >

@@ -38,7 +38,11 @@ class MqttSubscriber extends Command
                 'function' => function ($topic, $msg) {
                     echo "\n[DEBUG] Ada pesan masuk di topik $topic: $msg\n";
 
-                    $payload = json_decode($msg, true);
+                    $cleanMsg = preg_replace('/:\s*(-?\binf\b|-?\bnan\b)/i', ': 0.0', $msg);
+
+                    // Sekarang decode menggunakan string yang sudah bersih dari kata nan kaku
+                    $payload = json_decode($cleanMsg, true);
+                    
                     if (!$payload) {
                         echo "[ERROR] Payload bukan JSON yang valid\n";
                         return;

@@ -2,33 +2,47 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\EnvironmentLog;
-use Illuminate\Support\Facades\Auth;
+// --- 1. IMPORT STATEMENT ---
+use App\Models\WorkerEnvironmentLog; 
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth; // 🔑 TAMBAHKAN INI agar beralih ke Facade murni
 use Inertia\Inertia;
 
 class WorkerController extends Controller
 {
+    /**
+     * Tampilan utama halaman status worker
+     */
     public function index()
     {
-        $user = Auth::user();
+        return Inertia::render('Worker/Display');
+    }
 
-        // Mengambil data terbaru khusus untuk Unit ID sesuai ID Worker yang login
-        $latestLog = EnvironmentLog::where('unit_id', $user->id)
-            ->orderBy('created_at', 'desc')
-            ->first();
-
-        // Mengambil riwayat 10 data terakhir untuk grafik mini di halaman worker
-        $history = EnvironmentLog::where('unit_id', $user->id)
-            ->orderBy('created_at', 'desc')
-            ->take(10)
-            ->get();
-
-        return Inertia::render('Worker/Display', [
-            'workerData' => $latestLog,
-            'history' => $history,
-            'auth' => [
-                'user' => $user
-            ]
+    /**
+     * Menyimpan data PMV, PPD, dan kustomisasi aktivitas secara realtime
+     */
+    public function storeLog(Request $request)
+    {
+        $request->validate([
+            'pmv' => 'required|numeric',
+            'ppd' => 'required|numeric',
+            'clothing_insulation' => 'required|numeric',
+            'activity_name' => 'required|string',
+            'activity_met' => 'required|numeric',
         ]);
+
+        WorkerEnvironmentLog::create([
+            'user_id' => Auth::id(), // 🔑 UBAH MENJADI INI (Sangat aman & dikenali semua IDE)
+            'pmv' => $request->pmv,
+            'ppd' => $request->ppd,
+            'clothing_insulation' => $request->clothing_insulation,
+            'activity_name' => $request->activity_name,
+            'activity_met' => $request->activity_met,
+        ]);
+
+        $latestLog = WorkerEnvironmentLog::where('user_id', Auth::id())->latest()->first();
+        event(new \App\Events\EnvironmentDataReceived($latestLog));
+
+        return response()->json(['status' => 'success', 'message' => 'Log terekam!']);
     }
 }
