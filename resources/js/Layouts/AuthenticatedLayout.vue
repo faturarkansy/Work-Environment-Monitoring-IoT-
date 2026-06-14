@@ -26,7 +26,7 @@ const showingNavigationDropdown = ref(false);
                                 "
                             >
                                 <img
-                                    src="/images/Logo.png"
+                                    src="/images/Logo1.png"
                                     alt="Logo"
                                     class="block h-9 w-auto"
                                 />
@@ -84,7 +84,7 @@ const showingNavigationDropdown = ref(false);
 
                     <div class="flex items-center space-x-2 sm:hidden">
                         <div
-                            class="text-xs font-bold text-gray-700 bg-gray-50 px-3 py-2 rounded-lg border border-gray-100 truncate max-w-[120px]"
+                            class="h-10 flex items-center text-base font-bold text-gray-700 bg-gray-100 px-3 rounded-lg border border-gray-100 truncate max-w-[120px]"
                         >
                             {{ $page.props.auth.user.name }}
                         </div>
