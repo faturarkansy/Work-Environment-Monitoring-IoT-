@@ -38,7 +38,7 @@ const submit = () => {
             class="flex w-full max-w-[1100px] h-[95vh] max-h-[680px] max-[950px]:flex-col max-[950px]:max-w-[600px] max-[950px]:h-auto max-[950px]:min-h-[85vh]"
         >
             <div
-                class="flex-[1.1] flex flex-col justify-center gap-y-4 items-start p-6 max-[950px]:p-[30px] max-[640px]:!p-2 max-[950px]:items-center max-[950px]:justify-center"
+                class="flex-[1.1] flex flex-col justify-center gap-y-4 items-start p-6 max-[950px]:p-[30px] max-[640px]:!p-2 max-[950px]:items-center max-[950px]:justify-center max-[950px]:flex-none max-[950px]:pt-4 max-[950px]:pb-2"
             >
                 <div
                     class="flex items-start ml-5 max-[950px]:ml-0 max-[950px]:items-center max-[950px]:justify-center max-[950px]:w-full"
@@ -88,7 +88,7 @@ const submit = () => {
                 class="flex-[0.9] flex flex-col items-center p-6 max-[950px]:p-5 max-[950px]:flex-1"
             >
                 <div
-                    class="flex-1 flex flex-col justify-center items-center w-full"
+                    class="flex-1 flex flex-col justify-center items-center w-full max-[950px]:justify-start max-[950px]:pt-4"
                 >
                     <div
                         class="bg-white w-full max-w-[400px] py-10 px-[35px] rounded-[35px] border border-gray-200 shadow-[0_0_4px_#00000040] max-[950px]:py-10 max-[950px]:px-7"
@@ -195,15 +195,15 @@ const submit = () => {
                 </div>
 
                 <div
-                    class="w-full text-center pt-8 max-[950px]:mt-auto max-[950px]:pt-8"
+                    class="w-full text-center pt-5 max-[950px]:mt-auto max-[950px]:pt-8 max-[950px]:pb-2"
                 >
                     <p
-                        class="text-[13px] text-indigo-800 font-bold tracking-wide italic font-sans selection:bg-indigo-100 hidden max-[950px]:block"
+                        class="text-[13px] text-indigo-900 font-bold tracking-wide italic font-sans selection:bg-indigo-100 hidden max-[950px]:block mb-2"
                     >
                         "Make a comfortable place for your work"
                     </p>
                     <p
-                        class="text-[11px] text-gray-800 mt-1.5 font-sans tracking-tight"
+                        class="text-[11px] text-gray-800 font-sans tracking-tight"
                     >
                         &copy; 2026 Envimatework. All Rights Reserved.
                     </p>
