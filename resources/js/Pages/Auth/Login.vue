@@ -32,13 +32,13 @@ const submit = () => {
     <Head title="Log in" />
 
     <div
-        class="h-screen flex justify-center items-center bg-[linear-gradient(180deg,#ffffff_20%,#b1b2f8_95%)] font-sans p-6 overflow-hidden max-[950px]:h-auto max-[950px]:overflow-auto max-[950px]:p-5"
+        class="h-screen flex justify-center items-center bg-[linear-gradient(180deg,#ffffff_20%,#b1b2f8_95%)] font-sans p-6 overflow-hidden max-[950px]:h-auto max-[950px]:min-h-screen max-[950px]:overflow-auto max-[950px]:p-5"
     >
         <div
-            class="flex w-full max-w-[1100px] h-[95vh] max-h-[680px] max-[950px]:flex-col max-[950px]:max-w-[600px] max-[950px]:h-auto"
+            class="flex w-full max-w-[1100px] h-[95vh] max-h-[680px] max-[950px]:flex-col max-[950px]:max-w-[600px] max-[950px]:h-auto max-[950px]:min-h-[85vh]"
         >
             <div
-                class="flex-[1.1] flex flex-col justify-start gap-y-4 items-start p-6 max-[950px]:p-[30px] max-[640px]:!p-2 max-[950px]:items-center"
+                class="flex-[1.1] flex flex-col justify-center gap-y-4 items-start p-6 max-[950px]:p-[30px] max-[640px]:!p-2 max-[950px]:items-center max-[950px]:justify-center"
             >
                 <div
                     class="flex items-start ml-5 max-[950px]:ml-0 max-[950px]:items-center max-[950px]:justify-center max-[950px]:w-full"
@@ -85,107 +85,128 @@ const submit = () => {
             </div>
 
             <div
-                class="flex-[0.9] flex justify-center items-center p-6 max-[950px]:p-5"
+                class="flex-[0.9] flex flex-col items-center p-6 max-[950px]:p-5 max-[950px]:flex-1"
             >
                 <div
-                    class="bg-white w-full max-w-[400px] py-10 px-[35px] rounded-[35px] border border-gray-200 shadow-[0_0_4px_#00000040] max-[950px]:py-10 max-[950px]:px-7"
+                    class="flex-1 flex flex-col justify-center items-center w-full"
                 >
-                    <h2 class="text-[28px] font-bold text-[#333] text-center">
-                        Welcome Back
-                    </h2>
-                    <p
-                        class="text-[14px] text-[#6c757d] text-center mt-2 mb-[25px]"
-                    >
-                        Login with your account first
-                    </p>
-
                     <div
-                        v-if="status"
-                        class="mb-4 text-sm font-medium text-green-600"
+                        class="bg-white w-full max-w-[400px] py-10 px-[35px] rounded-[35px] border border-gray-200 shadow-[0_0_4px_#00000040] max-[950px]:py-10 max-[950px]:px-7"
                     >
-                        {{ status }}
-                    </div>
+                        <h2
+                            class="text-[28px] font-bold text-[#333] text-center"
+                        >
+                            Welcome Back
+                        </h2>
+                        <p
+                            class="text-[14px] text-[#6c757d] text-center mt-2 mb-[25px]"
+                        >
+                            Login with your account first
+                        </p>
 
-                    <form @submit.prevent="submit" class="flex flex-col">
-                        <div>
-                            <div class="relative mb-4">
-                                <input
-                                    id="email"
-                                    type="email"
-                                    class="w-full border border-[#ccd3dd] rounded-3xl px-[25px] h-[40px] transition-colors duration-200 focus:border-[#6a53f2] focus:ring-0 focus:outline-none text-[14px] text-[#333]"
-                                    v-model="form.email"
-                                    required
-                                    autofocus
-                                    autocomplete="username"
-                                    placeholder="Email"
-                                />
-                                <InputError
-                                    class="mt-1"
-                                    :message="form.errors.email"
-                                />
-                            </div>
+                        <div
+                            v-if="status"
+                            class="mb-4 text-sm font-medium text-green-600"
+                        >
+                            {{ status }}
                         </div>
 
-                        <div class="mt-2">
-                            <div class="relative mb-4">
-                                <input
-                                    id="password"
-                                    type="password"
-                                    class="w-full border border-[#ccd3dd] rounded-3xl px-[25px] h-[40px] transition-colors duration-200 focus:border-[#6a53f2] focus:ring-0 focus:outline-none text-[14px] text-[#333]"
-                                    v-model="form.password"
-                                    required
-                                    autocomplete="current-password"
-                                    placeholder="Password"
-                                />
-                                <InputError
-                                    class="mt-1"
-                                    :message="form.errors.password"
-                                />
+                        <form @submit.prevent="submit" class="flex flex-col">
+                            <div>
+                                <div class="relative mb-4">
+                                    <input
+                                        id="email"
+                                        type="email"
+                                        class="w-full border border-[#ccd3dd] rounded-3xl px-[25px] h-[40px] transition-colors duration-200 focus:border-[#6a53f2] focus:ring-0 focus:outline-none text-[14px] text-[#333]"
+                                        v-model="form.email"
+                                        required
+                                        autofocus
+                                        autocomplete="username"
+                                        placeholder="Email"
+                                    />
+                                    <InputError
+                                        class="mt-1"
+                                        :message="form.errors.email"
+                                    />
+                                </div>
                             </div>
-                        </div>
 
-                        <div class="mt-2 flex items-center justify-between">
-                            <label class="flex items-center">
-                                <Checkbox
-                                    name="remember"
-                                    v-model:checked="form.remember"
-                                    class="border-[#ccd3dd] rounded-[4px] checked:bg-[#6a53f2] checked:border-[#6a53f2]"
-                                />
-                                <span class="ms-2 text-sm text-gray-600"
-                                    >Remember me</span
+                            <div class="mt-2">
+                                <div class="relative mb-4">
+                                    <input
+                                        id="password"
+                                        type="password"
+                                        class="w-full border border-[#ccd3dd] rounded-3xl px-[25px] h-[40px] transition-colors duration-200 focus:border-[#6a53f2] focus:ring-0 focus:outline-none text-[14px] text-[#333]"
+                                        v-model="form.password"
+                                        required
+                                        autocomplete="current-password"
+                                        placeholder="Password"
+                                    />
+                                    <InputError
+                                        class="mt-1"
+                                        :message="form.errors.password"
+                                    />
+                                </div>
+                            </div>
+
+                            <div class="mt-2 flex items-center justify-between">
+                                <label class="flex items-center">
+                                    <Checkbox
+                                        name="remember"
+                                        v-model:checked="form.remember"
+                                        class="border-[#ccd3dd] rounded-[4px] checked:bg-[#6a53f2] checked:border-[#6a53f2]"
+                                    />
+                                    <span class="ms-2 text-sm text-gray-600"
+                                        >Remember me</span
+                                    >
+                                </label>
+
+                                <Link
+                                    v-if="canResetPassword"
+                                    :href="route('password.request')"
+                                    class="text-sm text-[#6c757d] no-underline hover:text-[#333]"
                                 >
-                            </label>
+                                    Forgot password?
+                                </Link>
+                            </div>
 
+                            <div class="mt-6 w-full flex justify-center">
+                                <button
+                                    type="submit"
+                                    class="w-1/2 shrink-0 bg-[#6a53f2] text-white text-[15px] font-bold h-[40px] flex items-center justify-center rounded-3xl border-none transition-colors duration-200 cursor-pointer hover:bg-[#583fe4]"
+                                    :class="{ 'opacity-25': form.processing }"
+                                    :disabled="form.processing"
+                                >
+                                    Login
+                                </button>
+                            </div>
+                        </form>
+
+                        <div class="mt-6 text-center text-sm text-gray-600">
+                            Don't have account?
                             <Link
-                                v-if="canResetPassword"
-                                :href="route('password.request')"
-                                class="text-sm text-[#6c757d] no-underline hover:text-[#333]"
+                                :href="route('register')"
+                                class="text-[#6a53f2] no-underline font-bold hover:underline"
                             >
-                                Forgot password?
+                                Registration
                             </Link>
                         </div>
-
-                        <div class="mt-6 w-full flex justify-center">
-                            <button
-                                type="submit"
-                                class="w-1/2 shrink-0 bg-[#6a53f2] text-white text-[15px] font-bold h-[40px] flex items-center justify-center rounded-3xl border-none transition-colors duration-200 cursor-pointer hover:bg-[#583fe4]"
-                                :class="{ 'opacity-25': form.processing }"
-                                :disabled="form.processing"
-                            >
-                                Login
-                            </button>
-                        </div>
-                    </form>
-
-                    <div class="mt-6 text-center text-sm text-gray-600">
-                        Doesn't have account?
-                        <Link
-                            :href="route('register')"
-                            class="text-[#6a53f2] no-underline font-bold hover:underline"
-                        >
-                            Registration
-                        </Link>
                     </div>
+                </div>
+
+                <div
+                    class="w-full text-center pt-8 max-[950px]:mt-auto max-[950px]:pt-8"
+                >
+                    <p
+                        class="text-[13px] text-indigo-800 font-bold tracking-wide italic font-sans selection:bg-indigo-100 hidden max-[950px]:block"
+                    >
+                        "Make a comfortable place for your work"
+                    </p>
+                    <p
+                        class="text-[11px] text-gray-800 mt-1.5 font-sans tracking-tight"
+                    >
+                        &copy; 2026 Envimatework. All Rights Reserved.
+                    </p>
                 </div>
             </div>
         </div>
