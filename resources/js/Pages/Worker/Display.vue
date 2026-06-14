@@ -125,14 +125,19 @@ const toggleLogging = () => {
         console.log(
             "[SYSTEM] Pengiriman data realtime ke database DIHENTIKAN.",
         );
-        
+
         axios
             .post(route("worker.stop-log"))
             .then(() => {
-                console.log("[SYSTEM] Sinyal stop sukses disiarkan ke halaman Admin.");
+                console.log(
+                    "[SYSTEM] Sinyal stop sukses disiarkan ke halaman Admin.",
+                );
             })
             .catch((error) => {
-                console.error("[AXIOS ERROR] Gagal mengirim sinyal stop:", error);
+                console.error(
+                    "[AXIOS ERROR] Gagal mengirim sinyal stop:",
+                    error,
+                );
             });
     }
 };
@@ -324,10 +329,10 @@ const toggleModal = () => (isModalOpen.value = !isModalOpen.value);
                                 </div>
                             </div>
                             <div
-                                class="bg-white/90 text-sm py-1 px-4 rounded-full text-center backdrop-blur-sm mt-4"
+                                class="bg-white/90 text-sm py-1 px-4 rounded-xl text-center backdrop-blur-sm mt-4"
                             >
                                 <span
-                                    class="font-mono font-bold text-lg text-gray-800"
+                                    class="font-mono font-bold text-sm sm:text-lg text-gray-800"
                                 >
                                     {{ currentTime }} WIB
                                 </span>
@@ -463,7 +468,9 @@ const toggleModal = () => (isModalOpen.value = !isModalOpen.value);
                                         + Add more clothing
                                     </button>
                                 </div>
-				<div class="border-t border-gray-200 my-2 md:hidden"></div>
+                                <div
+                                    class="border-t border-gray-200 my-2 md:hidden"
+                                ></div>
                                 <div class="space-y-3 relative">
                                     <label
                                         class="text-xs font-bold text-gray-700 block uppercase tracking-wider"

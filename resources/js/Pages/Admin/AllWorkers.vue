@@ -53,13 +53,13 @@ const ambientData = ref({
 });
 const workerStates = ref({});
 
-// 🔑 1. FUNGSI FILTER BARU: Menyaring secara ketat agar hanya mengambil user dengan role 'worker'
+// Menyaring secara ketat agar hanya mengambil user dengan role 'worker'
 const filteredWorkers = computed(() => {
     if (!props.workers || !Array.isArray(props.workers)) return [];
     return props.workers.filter((worker) => worker.role === "worker");
 });
 
-// 🔑 2. SINKRONISASI INDEKS: Mengambil data pekerja aktif dari hasil array yang sudah disaring
+// Mengambil data pekerja aktif dari hasil array yang sudah disaring
 const currentWorker = computed(() => {
     if (filteredWorkers.value.length === 0) return null;
     return filteredWorkers.value[currentIndex.value];
@@ -79,6 +79,7 @@ const updateLiveSensorData = () => {
             hour: "2-digit",
             minute: "2-digit",
             second: "2-digit",
+            hour12: false,
         });
         chartLabels.value.push(sekarang);
         pmvHistory.value.push(activeWorkerState.pmv);
@@ -110,7 +111,7 @@ onMounted(() => {
 
     updateLiveSensorData();
 
-    // 🔑 3. SINKRONISASI TIMER INTERVAL: slideshow berputar mengacu pada panjang filteredWorkers
+    // slideshow berputar mengacu pada panjang filteredWorkers
     slideshowInterval = setInterval(() => {
         if (filteredWorkers.value.length > 0) {
             countdown.value--;
@@ -125,9 +126,8 @@ onMounted(() => {
 
     // Echo Pipeline
     if (window.Echo) {
-        window.Echo.channel("environment-monitor").listen(
-            ".data.received",
-            (e) => {
+        window.Echo.channel("environment-monitor")
+            .listen(".data.received", (e) => {
                 const payload = e.data;
                 if (!payload) return;
 
@@ -149,6 +149,7 @@ onMounted(() => {
                             hour: "2-digit",
                             minute: "2-digit",
                             second: "2-digit",
+                            hour12: false,
                         });
                         chartLabels.value.push(sekarang);
 
@@ -183,6 +184,7 @@ onMounted(() => {
                             hour: "2-digit",
                             minute: "2-digit",
                             second: "2-digit",
+                            hour12: false,
                         });
                         chartLabels.value.push(sekarang);
                         pmvHistory.value.push(safeParse(payload.pmv));
@@ -195,47 +197,46 @@ onMounted(() => {
                         }
                     }
                 }
-            },
-        )
-	.listen(".worker.updated", (e) => {
-            const payload = e.logData;
-            if (!payload || !payload.user_id) return;
+            })
+            .listen(".worker.updated", (e) => {
+                const payload = e.logData;
+                if (!payload || !payload.user_id) return;
 
-            // 1. Update status memori pekerja di halaman admin
-            workerStates.value[payload.user_id] = {
-                pmv: safeParse(payload.pmv),
-                ppd: safeParse(payload.ppd),
-                clothing_insulation: safeParse(payload.clothing_insulation),
-                activity_name: payload.activity_name || "Unknown",
-                activity_met: safeParse(payload.activity_met),
-            };
+                workerStates.value[payload.user_id] = {
+                    pmv: safeParse(payload.pmv),
+                    ppd: safeParse(payload.ppd),
+                    clothing_insulation: safeParse(payload.clothing_insulation),
+                    activity_name: payload.activity_name || "Unknown",
+                    activity_met: safeParse(payload.activity_met),
+                };
 
-            // 2. Jika pekerja yang datanya masuk adalah yang sedang aktif di slideshow, langsung suntik ke grafik
-            if (currentWorker.value && payload.user_id == currentWorker.value.id) {
-                const sekarang = new Date().toLocaleTimeString([], {
-                    hour: "2-digit",
-                    minute: "2-digit",
-                    second: "2-digit",
-                });
-                chartLabels.value.push(sekarang);
-                pmvHistory.value.push(safeParse(payload.pmv));
-                ppdHistory.value.push(safeParse(payload.ppd));
+                if (
+                    currentWorker.value &&
+                    payload.user_id == currentWorker.value.id
+                ) {
+                    const sekarang = new Date().toLocaleTimeString([], {
+                        hour: "2-digit",
+                        minute: "2-digit",
+                        second: "2-digit",
+                        hour12: false,
+                    });
+                    chartLabels.value.push(sekarang);
+                    pmvHistory.value.push(safeParse(payload.pmv));
+                    ppdHistory.value.push(safeParse(payload.ppd));
 
-                if (chartLabels.value.length > 10) {
-                    chartLabels.value.shift();
-                    pmvHistory.value.shift();
-                    ppdHistory.value.shift();
+                    if (chartLabels.value.length > 10) {
+                        chartLabels.value.shift();
+                        pmvHistory.value.shift();
+                        ppdHistory.value.shift();
+                    }
                 }
-            }
-        });
+            });
     }
 });
 
 onUnmounted(() => {
     if (slideshowInterval) clearInterval(slideshowInterval);
 });
-
-const isModalOpen = ref(false);
 
 const totalClo = computed(() => {
     if (currentWorker.value && workerStates.value[currentWorker.value.id]) {
@@ -315,8 +316,6 @@ const environmentStatus = computed(() => {
     };
 });
 
-const toggleModal = () => (isModalOpen.value = !isModalOpen.value);
-
 const pmvLineData = computed(() => ({
     labels: [...chartLabels.value],
     datasets: [
@@ -369,196 +368,372 @@ const ppdChartOptions = {
     <Head title="All Workers Monitor" />
 
     <AuthenticatedLayout>
-        <div class="p-6 bg-gray-100 h-auto font-sans">
-            <div
-                v-if="currentWorker"
-                class="hidden lg:grid grid-cols-5 gap-4 auto-rows-min"
-            >
-                <div
-                    class="col-span-2 row-span-1 bg-white px-6 py-1 rounded-2xl shadow-sm flex items-center self-start min-h-[30px]"
-                >
-                    <span class="text-black font-bold text-base mr-4 shrink-0"
-                        >Worker Name :</span
+        <div
+            class="p-6 bg-gray-100 h-auto font-sans max-[950px]:p-4 max-[950px]:pt-3"
+        >
+            <div v-if="currentWorker" class="w-full">
+                <div class="hidden lg:grid grid-cols-5 gap-4 auto-rows-min">
+                    <div
+                        class="col-span-2 row-span-1 bg-white px-6 py-1 rounded-2xl shadow-sm flex items-center self-start min-h-[30px]"
                     >
-                    <div class="flex space-x-4 font-bold items-center">
+                        <span
+                            class="text-black font-bold text-base mr-4 shrink-0"
+                            >Worker Name :</span
+                        >
+                        <div class="flex space-x-4 font-bold items-center">
+                            <div
+                                class="bg-indigo-100 text-indigo-700 px-6 py-1 rounded-full text-base transition shadow-sm"
+                            >
+                                {{ currentWorker.name }}
+                            </div>
+                        </div>
+                        <span class="text-gray-500 font-bold text-sm ml-auto">
+                            Workers {{ currentIndex + 1 }} out of
+                            {{ filteredWorkers.length }}
+                        </span>
+                    </div>
+
+                    <div
+                        class="col-span-1 row-span-2 bg-white p-5 py-4 rounded-xl shadow-sm"
+                    >
+                        <p class="text-indigo-500 text-md font-semibold mb-2">
+                            Air Speed
+                        </p>
+                        <div class="flex justify-between items-center">
+                            <h3 class="text-3xl font-bold">
+                                {{ ambientData.airSpeed.toFixed(2) }} m/s
+                            </h3>
+                            <div
+                                class="w-4 h-4 text-gray-400 font-bold text-xl"
+                            >
+                                =
+                            </div>
+                        </div>
+                    </div>
+
+                    <div
+                        class="col-span-1 row-span-2 bg-white p-5 rounded-xl shadow-sm"
+                    >
+                        <p class="text-indigo-500 text-md font-semibold mb-2">
+                            Wet Temperature
+                        </p>
+                        <div class="flex justify-between items-center">
+                            <h3 class="text-3xl font-bold">
+                                {{ ambientData.Twb.toFixed(2) }} &deg;C
+                            </h3>
+                            <div
+                                class="w-4 h-4 text-gray-400 font-bold text-xl"
+                            >
+                                =
+                            </div>
+                        </div>
+                    </div>
+
+                    <div
+                        class="col-span-1 row-span-2 bg-white p-5 rounded-xl shadow-sm"
+                    >
+                        <p class="text-indigo-500 text-md font-semibold mb-2">
+                            Dry Temperature
+                        </p>
+                        <div class="flex justify-between items-center">
+                            <h3 class="text-3xl font-bold">
+                                {{ ambientData.Tdb.toFixed(1) }} &deg;C
+                            </h3>
+                            <div
+                                class="w-4 h-4 text-gray-400 font-bold text-xl"
+                            >
+                                =
+                            </div>
+                        </div>
+                    </div>
+
+                    <div
+                        class="col-span-2 row-span-3 px-6 py-4 rounded-2xl shadow-md flex flex-col justify-between transition-all duration-500"
+                        :style="{ background: environmentStatus.color }"
+                    >
+                        <div class="text-white">
+                            <p class="text-lg opacity-90 font-medium">
+                                Thermal Comfort Status :
+                            </p>
+                            <h2 class="text-3xl font-bold mt-2 tracking-tight">
+                                {{ environmentStatus.label }}
+                            </h2>
+                            <div class="flex space-x-4 mt-1">
+                                <p class="text-base opacity-75 font-mono">
+                                    PMV Index:
+                                    {{
+                                        (
+                                            workerStates[currentWorker.id]
+                                                ?.pmv || 0
+                                        ).toFixed(2)
+                                    }}
+                                    | PPD Index:
+                                    {{
+                                        (
+                                            workerStates[currentWorker.id]
+                                                ?.ppd || 0
+                                        ).toFixed(2)
+                                    }}%
+                                </p>
+                            </div>
+                        </div>
+
                         <div
-                            class="bg-indigo-100 text-indigo-700 px-6 py-1 rounded-full text-base transition shadow-sm"
+                            class="bg-white/90 text-sm py-1.5 px-4 rounded-xl text-center backdrop-blur-sm mt-4 shadow-sm"
+                        >
+                            <div
+                                class="font-sans font-bold text-[14px] text-gray-800 flex items-center justify-center gap-1.5"
+                            >
+                                <span
+                                    class="w-2 h-2 rounded-full bg-indigo-500 animate-pulse shrink-0"
+                                ></span>
+                                Next Slide in
+                                <span
+                                    class="font-mono font-black text-base text-indigo-700"
+                                    >{{ countdown }}s</span
+                                >
+                            </div>
+                        </div>
+                    </div>
+
+                    <div
+                        class="col-span-1 row-span-2 bg-white p-5 rounded-xl shadow-sm"
+                    >
+                        <p class="text-indigo-500 text-md font-semibold mb-2">
+                            Radiation Temperature
+                        </p>
+                        <div class="flex justify-between items-center">
+                            <h3 class="text-3xl font-bold">
+                                {{ ambientData.MRT.toFixed(2) }} &deg;C
+                            </h3>
+                            <div
+                                class="w-4 h-4 text-gray-400 font-bold text-xl"
+                            >
+                                =
+                            </div>
+                        </div>
+                    </div>
+
+                    <div
+                        class="col-span-1 row-span-2 bg-white p-5 rounded-xl shadow-sm"
+                    >
+                        <p class="text-indigo-500 text-md font-semibold mb-2">
+                            Air Humidity
+                        </p>
+                        <div class="flex justify-between items-center">
+                            <h3 class="text-3xl font-bold">
+                                {{ ambientData.RH.toFixed(0) }} %
+                            </h3>
+                            <div
+                                class="w-4 h-4 text-gray-400 font-bold text-xl"
+                            >
+                                =
+                            </div>
+                        </div>
+                    </div>
+
+                    <div
+                        class="col-span-1 row-span-2 bg-white p-5 rounded-xl shadow-sm"
+                    >
+                        <p class="text-indigo-500 text-md font-semibold mb-2">
+                            Oxygen Volume
+                        </p>
+                        <div class="flex justify-between items-center">
+                            <h3 class="text-3xl font-bold">
+                                {{ ambientData.O2.toFixed(1) }} %vol
+                            </h3>
+                            <div
+                                class="w-4 h-4 text-gray-400 font-bold text-xl"
+                            >
+                                =
+                            </div>
+                        </div>
+                    </div>
+
+                    <div
+                        class="col-span-4 row-span-5 grid grid-cols-1 md:grid-cols-2 gap-4"
+                    >
+                        <div
+                            class="bg-white p-5 rounded-2xl shadow-sm border border-gray-100 flex flex-col justify-between"
+                        >
+                            <div class="flex justify-between items-center mb-2">
+                                <h3 class="text-gray-800 text-sm font-bold">
+                                    PMV Movement Index
+                                </h3>
+                                <span
+                                    class="text-[11px] text-indigo-600 bg-indigo-50 px-2.5 py-0.5 rounded-full font-mono font-bold"
+                                >
+                                    Clo:
+                                    {{
+                                        (
+                                            workerStates[currentWorker.id]
+                                                ?.clothing_insulation || 0
+                                        ).toFixed(2)
+                                    }}
+                                    |
+                                    {{
+                                        workerStates[currentWorker.id]
+                                            ?.activity_name || "No Activity"
+                                    }}:
+                                    {{
+                                        workerStates[currentWorker.id]
+                                            ?.activity_met || 0
+                                    }}
+                                    W/m²
+                                </span>
+                            </div>
+                            <div class="h-56">
+                                <Line
+                                    :data="pmvLineData"
+                                    :options="pmvChartOptions"
+                                />
+                            </div>
+                        </div>
+
+                        <div
+                            class="bg-white p-5 rounded-2xl shadow-sm border border-gray-100 flex flex-col justify-between"
+                        >
+                            <div class="flex justify-between items-center mb-2">
+                                <h3 class="text-gray-800 text-sm font-bold">
+                                    PPD Movement Index (%)
+                                </h3>
+                                <span
+                                    class="text-[11px] text-rose-600 bg-rose-50 px-2.5 py-0.5 rounded-full font-mono font-bold"
+                                >
+                                    Clo:
+                                    {{
+                                        (
+                                            workerStates[currentWorker.id]
+                                                ?.clothing_insulation || 0
+                                        ).toFixed(2)
+                                    }}
+                                    |
+                                    {{
+                                        workerStates[currentWorker.id]
+                                            ?.activity_name || "No Activity"
+                                    }}:
+                                    {{
+                                        workerStates[currentWorker.id]
+                                            ?.activity_met || 0
+                                    }}
+                                    W/m²
+                                </span>
+                            </div>
+                            <div class="h-56">
+                                <Line
+                                    :data="ppdLineData"
+                                    :options="ppdChartOptions"
+                                />
+                            </div>
+                        </div>
+                    </div>
+
+                    <div
+                        class="col-span-1 row-span-2 bg-white p-5 rounded-xl shadow-sm"
+                    >
+                        <p class="text-indigo-500 text-md font-semibold mb-2">
+                            Carbon Monoxide
+                        </p>
+                        <div class="flex justify-between items-center">
+                            <h3 class="text-3xl font-bold">
+                                {{ ambientData.CO.toFixed(0) }} PPM
+                            </h3>
+                            <div
+                                class="w-4 h-4 text-gray-400 font-bold text-xl"
+                            >
+                                =
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="lg:hidden flex flex-col space-y-4">
+                    <div
+                        class="bg-white px-6 py-2 rounded-2xl shadow-sm flex justify-center items-center gap-x-4"
+                    >
+                        <span
+                            class="text-gray-900 font-bold text-sm font-sans shrink-0"
+                        >
+                            Worker Name :
+                        </span>
+
+                        <div
+                            class="bg-indigo-50 text-[#6a53f2] px-5 py-1 rounded-full text-sm font-bold font-sans shadow-sm truncate max-w-[60%]"
                         >
                             {{ currentWorker.name }}
                         </div>
                     </div>
-                    <span class="text-gray-500 font-bold text-sm ml-auto">
-                        Pekerja {{ currentIndex + 1 }} dari
-                        {{ filteredWorkers.length }}
-                    </span>
-                </div>
 
-                <div
-                    class="col-span-1 row-span-2 bg-white p-5 py-4 rounded-xl shadow-sm"
-                >
-                    <p class="text-indigo-500 text-md font-semibold mb-2">
-                        Air Speed
-                    </p>
-                    <div class="flex justify-between items-center">
-                        <h3 class="text-3xl font-bold">
-                            {{ ambientData.airSpeed.toFixed(2) }} m/s
-                        </h3>
-                        <div class="w-4 h-4 text-gray-400 font-bold text-xl">
-                            =
-                        </div>
-                    </div>
-                </div>
-
-                <div
-                    class="col-span-1 row-span-2 bg-white p-5 rounded-xl shadow-sm"
-                >
-                    <p class="text-indigo-500 text-md font-semibold mb-2">
-                        Wet Temperature
-                    </p>
-                    <div class="flex justify-between items-center">
-                        <h3 class="text-3xl font-bold">
-                            {{ ambientData.Twb.toFixed(2) }} &deg;C
-                        </h3>
-                        <div class="w-4 h-4 text-gray-400 font-bold text-xl">
-                            =
-                        </div>
-                    </div>
-                </div>
-
-                <div
-                    class="col-span-1 row-span-2 bg-white p-5 rounded-xl shadow-sm"
-                >
-                    <p class="text-indigo-500 text-md font-semibold mb-2">
-                        Dry Temperature
-                    </p>
-                    <div class="flex justify-between items-center">
-                        <h3 class="text-3xl font-bold">
-                            {{ ambientData.Tdb.toFixed(1) }} &deg;C
-                        </h3>
-                        <div class="w-4 h-4 text-gray-400 font-bold text-xl">
-                            =
-                        </div>
-                    </div>
-                </div>
-
-                <div
-                    class="col-span-2 row-span-3 px-6 py-4 rounded-2xl shadow-md flex flex-col justify-between transition-all duration-500"
-                    :style="{ background: environmentStatus.color }"
-                >
-                    <div class="text-white">
-                        <p class="text-lg opacity-90 font-medium">
-                            Thermal Comfort Status :
-                        </p>
-                        <h2 class="text-3xl font-bold mt-2 tracking-tight">
-                            {{ environmentStatus.label }}
-                        </h2>
-                        <div class="flex space-x-4 mt-1">
-                            <p class="text-base opacity-75 font-mono">
-                                PMV Index:
-                                {{
-                                    (
-                                        workerStates[currentWorker.id]?.pmv || 0
-                                    ).toFixed(2)
-                                }}
-                                | PPD Index:
-                                {{
-                                    (
-                                        workerStates[currentWorker.id]?.ppd || 0
-                                    ).toFixed(2)
-                                }}%
+                    <div
+                        class="px-6 py-4 rounded-2xl shadow-md flex flex-col justify-between min-h-[140px]"
+                        :style="{ background: environmentStatus.color }"
+                    >
+                        <div class="text-white">
+                            <p class="text-lg font-bold text-white opacity-90">
+                                Thermal Comfort Status :
                             </p>
+                            <h2 class="text-3xl font-bold mt-2">
+                                {{ environmentStatus.label }}
+                            </h2>
+                            <div class="flex space-x-4 mt-1.5">
+                                <p class="text-sm opacity-90">
+                                    PMV:
+                                    {{
+                                        (
+                                            workerStates[currentWorker.id]
+                                                ?.pmv || 0
+                                        ).toFixed(2)
+                                    }}
+                                    | PPD:
+                                    {{
+                                        (
+                                            workerStates[currentWorker.id]
+                                                ?.ppd || 0
+                                        ).toFixed(2)
+                                    }}%
+                                </p>
+                            </div>
+                        </div>
+                        <div
+                            class="bg-white/90 text-sm py-1 px-4 rounded-xl text-center mt-4 shadow-sm"
+                        >
+                            <div
+                                class="font-sans font-bold text-[13px] text-gray-800 flex items-center justify-center gap-1.5"
+                            >
+                                <span
+                                    class="w-2 h-2 rounded-full bg-indigo-500 animate-pulse shrink-0"
+                                ></span>
+                                Next Slide in
+                                <span
+                                    class="font-mono font-black text-base text-indigo-700"
+                                    >{{ countdown }}s</span
+                                >
+                            </div>
                         </div>
                     </div>
 
                     <div
-                        class="bg-white/90 text-sm py-1.5 px-4 rounded-xl text-center backdrop-blur-sm mt-4 shadow-sm"
+                        class="bg-white p-4 rounded-2xl shadow-sm border border-gray-100 flex flex-col"
                     >
                         <div
-                            class="font-sans font-bold text-[14px] text-gray-800 flex items-center justify-center gap-1.5"
+                            class="flex justify-between items-center mb-2 gap-2"
                         >
-                            <span
-                                class="w-2 h-2 rounded-full bg-indigo-500 animate-pulse shrink-0"
-                            ></span>
-                            Next Slide in
-                            <span
-                                class="font-mono font-black text-base text-indigo-700"
-                                >{{ countdown }}s</span
+                            <h3
+                                class="text-gray-800 text-xs font-bold uppercase tracking-wide shrink-0"
                             >
-                        </div>
-                    </div>
-                </div>
-
-                <div
-                    class="col-span-1 row-span-2 bg-white p-5 rounded-xl shadow-sm"
-                >
-                    <p class="text-indigo-500 text-md font-semibold mb-2">
-                        Radiation Temperature
-                    </p>
-                    <div class="flex justify-between items-center">
-                        <h3 class="text-3xl font-bold">
-                            {{ ambientData.MRT.toFixed(2) }} &deg;C
-                        </h3>
-                        <div class="w-4 h-4 text-gray-400 font-bold text-xl">
-                            =
-                        </div>
-                    </div>
-                </div>
-
-                <div
-                    class="col-span-1 row-span-2 bg-white p-5 rounded-xl shadow-sm"
-                >
-                    <p class="text-indigo-500 text-md font-semibold mb-2">
-                        Air Humidity
-                    </p>
-                    <div class="flex justify-between items-center">
-                        <h3 class="text-3xl font-bold">
-                            {{ ambientData.RH.toFixed(0) }} %
-                        </h3>
-                        <div class="w-4 h-4 text-gray-400 font-bold text-xl">
-                            =
-                        </div>
-                    </div>
-                </div>
-
-                <div
-                    class="col-span-1 row-span-2 bg-white p-5 rounded-xl shadow-sm"
-                >
-                    <p class="text-indigo-500 text-md font-semibold mb-2">
-                        Oxygen Volume
-                    </p>
-                    <div class="flex justify-between items-center">
-                        <h3 class="text-3xl font-bold">
-                            {{ ambientData.O2.toFixed(1) }} %vol
-                        </h3>
-                        <div class="w-4 h-4 text-gray-400 font-bold text-xl">
-                            =
-                        </div>
-                    </div>
-                </div>
-
-                <div
-                    class="col-span-4 row-span-5 grid grid-cols-1 md:grid-cols-2 gap-4"
-                >
-                    <div
-                        class="bg-white p-5 rounded-2xl shadow-sm border border-gray-100 flex flex-col justify-between"
-                    >
-                        <div class="flex justify-between items-center mb-2">
-                            <h3 class="text-gray-800 text-sm font-bold">
                                 PMV Movement Index
                             </h3>
                             <span
-                                class="text-[11px] text-indigo-600 bg-indigo-50 px-2.5 py-0.5 rounded-full font-mono font-bold"
+                                class="text-[12px] text-indigo-600 bg-indigo-50 px-2.5 py-0.5 rounded-full font-mono font-bold truncate max-w-[65%] text-right"
                             >
                                 Clo:
                                 {{
-                                    workerStates[currentWorker.id]
-                                        ?.clothing_insulation || "0.00"
+                                    (
+                                        workerStates[currentWorker.id]
+                                            ?.clothing_insulation || 0
+                                    ).toFixed(2)
                                 }}
-                                |
-                                {{
-                                    workerStates[currentWorker.id]
-                                        ?.activity_name || "No Activity"
-                                }}:
+                                | No Activity:
                                 {{
                                     workerStates[currentWorker.id]
                                         ?.activity_met || 0
@@ -566,7 +741,7 @@ const ppdChartOptions = {
                                 W/m²
                             </span>
                         </div>
-                        <div class="h-56">
+                        <div class="h-44">
                             <Line
                                 :data="pmvLineData"
                                 :options="pmvChartOptions"
@@ -575,53 +750,189 @@ const ppdChartOptions = {
                     </div>
 
                     <div
-                        class="bg-white p-5 rounded-2xl shadow-sm border border-gray-100 flex flex-col justify-between"
+                        class="bg-white p-4 rounded-2xl shadow-sm border border-gray-100 flex flex-col"
                     >
-                        <div class="flex justify-between items-center mb-2">
-                            <h3 class="text-gray-800 text-sm font-bold">
+                        <div
+                            class="flex justify-between items-center mb-2 gap-2"
+                        >
+                            <h3
+                                class="text-gray-800 text-xs font-bold uppercase tracking-wide shrink-0"
+                            >
                                 PPD Movement Index (%)
                             </h3>
                             <span
-                                class="text-[11px] text-rose-600 bg-rose-50 px-2.5 py-0.5 rounded-full font-mono font-bold"
+                                class="text-[12px] text-rose-600 bg-rose-50 px-2.5 py-0.5 rounded-full font-mono font-bold truncate max-w-[65%] text-right"
                             >
                                 Clo:
                                 {{
-                                    workerStates[currentWorker.id]
-                                        ?.clothing_insulation || "0.00"
+                                    (
+                                        workerStates[currentWorker.id]
+                                            ?.clothing_insulation || 0
+                                    ).toFixed(2)
                                 }}
-                                |
-                                {{
-                                    workerStates[currentWorker.id]
-                                        ?.activity_name || "No Activity"
-                                }}:
+                                | No Activity:
                                 {{
                                     workerStates[currentWorker.id]
                                         ?.activity_met || 0
                                 }}
-				W/m²
+                                W/m²
                             </span>
                         </div>
-                        <div class="h-56">
+                        <div class="h-44">
                             <Line
                                 :data="ppdLineData"
                                 :options="ppdChartOptions"
                             />
                         </div>
                     </div>
-                </div>
 
-                <div
-                    class="col-span-1 row-span-2 bg-white p-5 rounded-xl shadow-sm"
-                >
-                    <p class="text-indigo-500 text-md font-semibold mb-2">
-                        Carbon Monoxide
-                    </p>
-                    <div class="flex justify-between items-center">
-                        <h3 class="text-3xl font-bold">
-                            {{ ambientData.CO.toFixed(0) }} PPM
-                        </h3>
-                        <div class="w-4 h-4 text-gray-400 font-bold text-xl">
-                            =
+                    <div class="grid grid-cols-2 gap-4">
+                        <div
+                            class="bg-white p-4 rounded-xl shadow-sm border border-gray-100 flex flex-col justify-between"
+                        >
+                            <p
+                                class="text-indigo-500 text-xs font-semibold mb-1"
+                            >
+                                Air Speed
+                            </p>
+                            <h4
+                                class="text-lg font-bold text-gray-800 tracking-tight"
+                            >
+                                {{ ambientData.airSpeed.toFixed(2) }}
+                                <span
+                                    class="text-[10px] font-normal text-gray-400"
+                                    >m/s</span
+                                >
+                            </h4>
+                        </div>
+
+                        <div
+                            class="bg-white p-4 rounded-xl shadow-sm border border-gray-100 flex flex-col justify-between"
+                        >
+                            <p
+                                class="text-indigo-500 text-xs font-semibold mb-1"
+                            >
+                                Wet Temp
+                            </p>
+                            <h4
+                                class="text-lg font-bold text-gray-800 tracking-tight"
+                            >
+                                {{ ambientData.Twb.toFixed(1) }}
+                                <span
+                                    class="text-[10px] font-normal text-gray-400"
+                                    >&deg;C</span
+                                >
+                            </h4>
+                        </div>
+
+                        <div
+                            class="bg-white p-4 rounded-xl shadow-sm border border-gray-100 flex flex-col justify-between"
+                        >
+                            <p
+                                class="text-indigo-500 text-xs font-semibold mb-1"
+                            >
+                                Dry Temp
+                            </p>
+                            <h4
+                                class="text-lg font-bold text-gray-800 tracking-tight"
+                            >
+                                {{ ambientData.Tdb.toFixed(1) }}
+                                <span
+                                    class="text-[10px] font-normal text-gray-400"
+                                    >&deg;C</span
+                                >
+                            </h4>
+                        </div>
+
+                        <div
+                            class="bg-white p-4 rounded-xl shadow-sm border border-gray-100 flex flex-col justify-between"
+                        >
+                            <p
+                                class="text-indigo-500 text-xs font-semibold mb-1"
+                            >
+                                Radiation Temp
+                            </p>
+                            <h4
+                                class="text-lg font-bold text-gray-800 tracking-tight"
+                            >
+                                {{ ambientData.MRT.toFixed(1) }}
+                                <span
+                                    class="text-[10px] font-normal text-gray-400"
+                                    >&deg;C</span
+                                >
+                            </h4>
+                        </div>
+
+                        <div
+                            class="bg-white p-4 rounded-xl shadow-sm border border-gray-100 flex flex-col justify-between"
+                        >
+                            <p
+                                class="text-indigo-500 text-xs font-semibold mb-1"
+                            >
+                                Air Humidity
+                            </p>
+                            <h4
+                                class="text-lg font-bold text-gray-800 tracking-tight"
+                            >
+                                {{ ambientData.RH.toFixed(0) }}
+                                <span
+                                    class="text-[10px] font-normal text-gray-400"
+                                    >%</span
+                                >
+                            </h4>
+                        </div>
+
+                        <div
+                            class="bg-white p-4 rounded-xl shadow-sm border border-gray-100 flex flex-col justify-between"
+                        >
+                            <p
+                                class="text-indigo-500 text-xs font-semibold mb-1"
+                            >
+                                Oxygen Volume
+                            </p>
+                            <h4
+                                class="text-lg font-bold text-gray-800 tracking-tight"
+                            >
+                                {{ ambientData.O2.toFixed(1) }}
+                                <span
+                                    class="text-[10px] font-normal text-gray-400"
+                                    >%vol</span
+                                >
+                            </h4>
+                        </div>
+
+                        <div
+                            class="bg-white p-4 rounded-xl shadow-sm border border-gray-100 flex flex-col justify-between col-span-1"
+                        >
+                            <p
+                                class="text-indigo-500 text-xs font-semibold mb-1"
+                            >
+                                Carbon Monoxide Volume
+                            </p>
+                            <h4
+                                class="text-lg font-bold text-gray-800 tracking-tight"
+                            >
+                                {{ ambientData.CO.toFixed(0) }}
+                                <span
+                                    class="text-[10px] font-normal text-gray-400"
+                                    >PPM</span
+                                >
+                            </h4>
+                        </div>
+                        <div
+                            class="bg-gradient-to-br from-indigo-500 to-purple-600 p-4 rounded-xl shadow-sm flex items-center justify-between text-white"
+                        >
+                            <div>
+                                <p class="text-[10px] font-bold opacity-75">
+                                    Active Nodes
+                                </p>
+                                <h4 class="text-xs font-black tracking-wide">
+                                    All Systems Live
+                                </h4>
+                            </div>
+                            <span class="text-[8px] animate-ping font-mono"
+                                >●</span
+                            >
                         </div>
                     </div>
                 </div>

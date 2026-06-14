@@ -227,7 +227,7 @@
                     class="col-span-4 row-span-5 bg-white p-5 rounded-2xl shadow-sm"
                 >
                     <h3 class="text-gray-800 text-md font-bold mb-4">
-                        WBGT Real-time Movement Index (&deg;C)
+                        WBGT Movement Index (&deg;C)
                     </h3>
                     <div class="h-64">
                         <Line
@@ -267,22 +267,23 @@
                     :style="{ background: environmentStatus.color }"
                 >
                     <div class="text-white">
-                        <p class="text-lg opacity-90">
-                            Status Lingkungan Kerja :
+                        <p class="text-lg font-bold text-white opacity-90">
+                            Thermal Safety Status :
                         </p>
                         <h2 class="text-3xl font-bold mt-2">
                             {{ environmentStatus.label }}
                         </h2>
-                        <div class="flex space-x-4">
+                        <div class="flex space-x-4 mt-1.5">
                             <p class="text-sm opacity-90">
                                 WBGT Index: {{ wbgtValue.toFixed(2) }} &deg;C
                             </p>
                         </div>
                     </div>
                     <div
-                        class="bg-white/90 text-sm py-1 px-4 rounded-full text-center mt-4"
+                        class="bg-white/90 text-sm py-1 px-4 rounded-xl text-center mt-4"
                     >
-                        <span class="font-mono font-bold text-lg text-gray-800"
+                        <span
+                            class="font-mono font-bold text-sm sm:text-lg text-gray-800"
                             >{{ currentTime }} WIB</span
                         >
                     </div>
