@@ -84,7 +84,7 @@ const showingNavigationDropdown = ref(false);
 
                     <div class="flex items-center space-x-2 sm:hidden">
                         <div
-                            class="h-10 flex items-center text-base font-bold text-gray-700 bg-gray-100 px-3 rounded-lg border border-gray-100 truncate max-w-[120px]"
+                            class="h-10 flex items-center text-base px-3 font-bold text-gray-700 truncate max-w-[120px]"
                         >
                             {{ $page.props.auth.user.name }}
                         </div>
@@ -170,50 +170,64 @@ const showingNavigationDropdown = ref(false);
                 }"
                 class="sm:hidden border-t border-gray-200"
             >
-                <div
-                    v-if="$page.props.auth.user.role === 'admin'"
-                    class="space-y-1 pb-3 pt-2"
-                >
+                <div class="space-y-1 pb-3 pt-2">
+                    <template v-if="$page.props.auth.user.role === 'admin'">
+                        <ResponsiveNavLink
+                            :href="route('dashboard')"
+                            :active="route().current('dashboard')"
+                        >
+                            Dashboard
+                        </ResponsiveNavLink>
+                        <ResponsiveNavLink
+                            :href="route('all-workers.index')"
+                            :active="route().current('all-workers.index')"
+                        >
+                            All Workers
+                        </ResponsiveNavLink>
+                        <ResponsiveNavLink
+                            :href="route('history.index')"
+                            :active="route().current('history.index')"
+                        >
+                            History
+                        </ResponsiveNavLink>
+                    </template>
+
                     <ResponsiveNavLink
-                        :href="route('dashboard')"
-                        :active="route().current('dashboard')"
+                        :href="route('profile.edit')"
+                        :active="route().current('profile.edit')"
                     >
-                        Dashboard
+                        Profile
                     </ResponsiveNavLink>
                     <ResponsiveNavLink
-                        :href="route('all-workers.index')"
-                        :active="route().current('all-workers.index')"
+                        :href="route('logout')"
+                        method="post"
+                        as="button"
                     >
-                        All Workers
-                    </ResponsiveNavLink>
-                    <ResponsiveNavLink
-                        :href="route('history.index')"
-                        :active="route().current('history.index')"
-                    >
-                        History
+                        Log Out
                     </ResponsiveNavLink>
                 </div>
 
-                <div class="border-t border-gray-200 pb-1 pt-4">
+                <div class="border-t border-gray-200 pb-6 pt-4 bg-gray-50/50">
                     <div class="px-4">
-                        <div class="text-base font-medium text-gray-800">
-                            {{ $page.props.auth.user.name }}
+                        <div
+                            class="text-base font-medium text-gray-800 flex justify-between items-center w-full"
+                        >
+                            <span>{{ $page.props.auth.user.name }}</span>
+
+                            <span
+                                class="text-[11px] font-bold uppercase tracking-wider px-2.5 py-0.5 rounded-md border text-center font-sans shadow-2xs"
+                                :class="
+                                    $page.props.auth.user.role === 'admin'
+                                        ? 'bg-indigo-50 text-[#6a53f2] border-indigo-100'
+                                        : 'bg-gray-50 text-gray-600 border-gray-100'
+                                "
+                            >
+                                {{ $page.props.auth.user.role }}
+                            </span>
                         </div>
-                        <div class="text-sm font-medium text-gray-500">
+                        <div class="text-sm font-medium text-gray-500 mt-0.5">
                             {{ $page.props.auth.user.email }}
                         </div>
-                    </div>
-                    <div class="mt-3 space-y-1">
-                        <ResponsiveNavLink :href="route('profile.edit')">
-                            Profile
-                        </ResponsiveNavLink>
-                        <ResponsiveNavLink
-                            :href="route('logout')"
-                            method="post"
-                            as="button"
-                        >
-                            Log Out
-                        </ResponsiveNavLink>
                     </div>
                 </div>
             </div>
