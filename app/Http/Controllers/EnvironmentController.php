@@ -11,7 +11,7 @@ class EnvironmentController extends Controller
     public function index(Request $request)
     {
         $filter = $request->query('unit', 'all');
-        $rawLogs = EnvironmentLog::orderBy('created_at', 'desc')->get();
+        $rawLogs = EnvironmentLog::orderBy('created_at', 'desc')->take(50)->get();
 
         $expandedLogs = collect();
 

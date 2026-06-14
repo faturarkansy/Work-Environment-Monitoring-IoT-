@@ -41,8 +41,28 @@ class WorkerController extends Controller
         ]);
 
         $latestLog = WorkerEnvironmentLog::where('user_id', Auth::id())->latest()->first();
-        event(new \App\Events\EnvironmentDataReceived($latestLog));
+
+	if ($latestLog) {
+            // Pemicu broadcast khusus untuk mengupdate data Clo & Met di halaman Admin secara aman
+            event(new \App\Events\WorkerLogUpdated($latestLog->toArray()));
+        }
 
         return response()->json(['status' => 'success', 'message' => 'Log terekam!']);
     }
+
+    public function stopLog()
+    {
+        // Siarkan paket data bermuatan 0 / kosongan ke WebSocket
+        event(new \App\Events\WorkerLogUpdated([
+            'user_id' => \Illuminate\Support\Facades\Auth::id(),
+            'pmv' => 0.0,
+            'ppd' => 0.0,
+            'clothing_insulation' => 0.0,
+            'activity_name' => 'Not Inputted Yet',
+            'activity_met' => 0.0,
+        ]));
+
+        return response()->json(['status' => 'success', 'message' => 'Perekaman berhasil dihentikan.']);
+    }
+
 }

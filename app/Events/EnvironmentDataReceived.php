@@ -4,19 +4,29 @@ namespace App\Events;
 
 use Illuminate\Broadcasting\Channel;
 use Illuminate\Broadcasting\InteractsWithSockets;
-use Illuminate\Contracts\Broadcasting\ShouldBroadcast;
+use Illuminate\Contracts\Broadcasting\ShouldBroadcastNow;
 use Illuminate\Foundation\Events\Dispatchable;
 use Illuminate\Queue\SerializesModels;
 
-class EnvironmentDataReceived implements ShouldBroadcast
+class EnvironmentDataReceived implements ShouldBroadcastNow
 {
     use Dispatchable, InteractsWithSockets, SerializesModels;
 
-    public function __construct(public array $data) {}
+    public array $data;
+
+    public function __construct(array $data)
+    {
+        array_walk_recursive($data, function (&$value) {
+            if (is_float($value) && (is_infinite($value) || is_nan($value))) {
+                $value = 0.0;
+            }
+        });
+
+        $this->data = $data;
+    }
 
     public function broadcastOn(): array
     {
-        // Nama channel yang akan didengarkan oleh Vue
         return [new Channel('environment-monitor')];
     }
 

@@ -196,7 +196,38 @@ onMounted(() => {
                     }
                 }
             },
-        );
+        )
+	.listen(".worker.updated", (e) => {
+            const payload = e.logData;
+            if (!payload || !payload.user_id) return;
+
+            // 1. Update status memori pekerja di halaman admin
+            workerStates.value[payload.user_id] = {
+                pmv: safeParse(payload.pmv),
+                ppd: safeParse(payload.ppd),
+                clothing_insulation: safeParse(payload.clothing_insulation),
+                activity_name: payload.activity_name || "Unknown",
+                activity_met: safeParse(payload.activity_met),
+            };
+
+            // 2. Jika pekerja yang datanya masuk adalah yang sedang aktif di slideshow, langsung suntik ke grafik
+            if (currentWorker.value && payload.user_id == currentWorker.value.id) {
+                const sekarang = new Date().toLocaleTimeString([], {
+                    hour: "2-digit",
+                    minute: "2-digit",
+                    second: "2-digit",
+                });
+                chartLabels.value.push(sekarang);
+                pmvHistory.value.push(safeParse(payload.pmv));
+                ppdHistory.value.push(safeParse(payload.ppd));
+
+                if (chartLabels.value.length > 10) {
+                    chartLabels.value.shift();
+                    pmvHistory.value.shift();
+                    ppdHistory.value.shift();
+                }
+            }
+        });
     }
 });
 
@@ -230,7 +261,7 @@ const calculatedMetrics = computed(() => {
         pmv: worker ? worker.pmv : 0,
         ppd: worker ? worker.ppd : 0,
         clothing_insulation: worker ? worker.clothing_insulation : 0,
-        activity_name: worker ? worker.activity_name : "Not Inputted Yet",
+        activity_name: worker ? worker.activity_name : "No Activity",
         activity_met: worker ? worker.activity_met : 0,
         ta: ambient.Tdb,
         rh: ambient.RH,
@@ -513,7 +544,7 @@ const ppdChartOptions = {
                     >
                         <div class="flex justify-between items-center mb-2">
                             <h3 class="text-gray-800 text-sm font-bold">
-                                PMV Real-time Index Movement
+                                PMV Movement Index
                             </h3>
                             <span
                                 class="text-[11px] text-indigo-600 bg-indigo-50 px-2.5 py-0.5 rounded-full font-mono font-bold"
@@ -526,13 +557,13 @@ const ppdChartOptions = {
                                 |
                                 {{
                                     workerStates[currentWorker.id]
-                                        ?.activity_name || "Not Inputted Yet"
-                                }}
-                                ({{
+                                        ?.activity_name || "No Activity"
+                                }}:
+                                {{
                                     workerStates[currentWorker.id]
                                         ?.activity_met || 0
                                 }}
-                                W/m²)
+                                W/m²
                             </span>
                         </div>
                         <div class="h-56">
@@ -548,7 +579,7 @@ const ppdChartOptions = {
                     >
                         <div class="flex justify-between items-center mb-2">
                             <h3 class="text-gray-800 text-sm font-bold">
-                                PPD Real-time Movement Index (%)
+                                PPD Movement Index (%)
                             </h3>
                             <span
                                 class="text-[11px] text-rose-600 bg-rose-50 px-2.5 py-0.5 rounded-full font-mono font-bold"
@@ -561,8 +592,13 @@ const ppdChartOptions = {
                                 |
                                 {{
                                     workerStates[currentWorker.id]
-                                        ?.activity_name || "Not Inputted Yet"
+                                        ?.activity_name || "No Activity"
+                                }}:
+                                {{
+                                    workerStates[currentWorker.id]
+                                        ?.activity_met || 0
                                 }}
+				W/m²
                             </span>
                         </div>
                         <div class="h-56">
