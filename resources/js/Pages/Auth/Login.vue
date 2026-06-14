@@ -182,7 +182,7 @@ const submit = () => {
                             </div>
                         </form>
 
-                        <div class="mt-6 text-center text-sm text-gray-600">
+                        <div class="mt-8 text-center text-sm text-gray-600">
                             Don't have account?
                             <Link
                                 :href="route('register')"
