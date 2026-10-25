@@ -238,24 +238,27 @@
                 </div>
 
                 <div
-                    class="col-span-1 row-span-2 bg-white p-5 rounded-xl shadow-sm"
+                    class="col-span-1 row-span-3 bg-white p-5 rounded-xl shadow-sm transition-all duration-500 flex flex-col justify-between"
+                    :style="{
+                        background: discomfortableStatus.color,
+                    }"
                 >
-                    <p class="text-indigo-500 text-md font-semibold mb-2">
-                        Carbon Monoxide Volume
-                    </p>
-                    <div class="flex justify-between items-center">
-                        <h3 class="text-3xl font-bold">
-                            {{ sensors.CO.toFixed(2) }} PPM
+                    <div>
+                        <p class="text-lg font-bold text-white opacity-90">
+                            Discomfort Index :
+                        </p>
+                        <h3
+                            class="text-3xl font-bold mt-2 tracking-tight text-white"
+                        >
+                            {{ discomfortableStatus.label }}
                         </h3>
-                        <div class="w-4 h-4">
-                            <img
-                                v-if="getTrendImage('CO')"
-                                :src="getTrendImage('CO')"
-                                class="w-full h-full object-contain"
-                            />
-                            <span v-else class="text-gray-400 font-bold text-xl"
-                                >=</span
+                        <div class="mt-2">
+                            <p
+                                class="text-base font-mono opacity-95 text-white"
                             >
+                                DI Index:
+                                {{ thiValue.toFixed(2) }} &deg;C
+                            </p>
                         </div>
                     </div>
                 </div>
@@ -670,6 +673,45 @@ const environmentStatus = computed(() => {
     };
 });
 
+// --- KALKULASI THI (DISCOMFORTABLE INDEX) ---
+const thiValue = computed(() => {
+    const t = sensors.value.Tdb;
+    const rh = sensors.value.RH;
+    if (t === 0 && rh === 0) return 0;
+    return 0.8 * t + (rh * t) / 500;
+});
+
+const discomfortableStatus = computed(() => {
+    const val = thiValue.value;
+    if (val === 0 && sensors.value.Tdb === 0) {
+        return {
+            label: "Waiting Data...",
+            color: "linear-gradient(135deg, #9ca3af 50%, #6b7280 100%)",
+        };
+    }
+    if (val < 21) {
+        return {
+            label: "Very Comfort",
+            color: "linear-gradient(135deg, #60a5fa 50%, #2563eb 100%)", // Biru
+        };
+    } else if (val <= 24) {
+        return {
+            label: "Comfort",
+            color: "linear-gradient(135deg, #7cba52 50%, #4F7C31 100%)", // Hijau
+        };
+    } else if (val <= 27) {
+        return {
+            label: "Normal",
+            color: "linear-gradient(135deg, #facc15 50%, #ca8a04 100%)", // Kuning
+        };
+    } else {
+        return {
+            label: "Discomfort",
+            color: "linear-gradient(135deg, #ef4444 50%, #b91d1d 100%)", // Merah
+        };
+    }
+});
+
 const getTrendImage = (key) => {
     const current = sensors.value[key];
     const previous = prevSensors.value[key];
@@ -706,13 +748,13 @@ onMounted(() => {
 
                 // Memasukkan data dengan proteksi fungsi safeParse dari properti payload
                 sensors.value = {
-                    airSpeed: safeParse(payload.airSpeed),
-                    MRT: safeParse(payload.MRT),
-                    Tdb: safeParse(payload.Tdb),
-                    Twb: safeParse(payload.Twb),
-                    RH: safeParse(payload.RH),
-                    O2: safeParse(payload.O2),
-                    CO: safeParse(payload.CO),
+                    airSpeed: safeParse(payload.airSpeed || payload.air_speed),
+                    MRT: safeParse(payload.MRT || payload.mrt),
+                    Tdb: safeParse(payload.Tdb || payload.tdb),
+                    Twb: safeParse(payload.Twb || payload.twb),
+                    RH: safeParse(payload.RH || payload.rh),
+                    O2: safeParse(payload.O2 || payload.o2),
+                    CO: safeParse(payload.CO || payload.co),
                 };
 
                 // Hitung WBGT Realtime tiap kali payload MQTT diterima
